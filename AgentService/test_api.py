@@ -14,8 +14,8 @@ def test_transcribe_api():
     payload = {
         "markdown": markdown_content,
         "duration": 20,
-        "speaker_1_name": "Donald Trump",
-        "speaker_2_name": "Kamala Harris",
+        "speaker_1_name": "Kate",
+        "speaker_2_name": "Bob",
         "model": "meta/llama-3.1-405b-instruct"
     }
 

@@ -314,8 +314,8 @@ def transcript_agent(text: str,
 class TranscriptionRequest(BaseModel):
     markdown: str
     duration: int = 20
-    speaker_1_name: str = "Donald Trump"
-    speaker_2_name: str = "Kamala Harris"
+    speaker_1_name: str = "Kate"
+    speaker_2_name: str = "Bob"
     model: str = "meta/llama-3.1-405b-instruct"
 
 @app.post("/transcribe")
