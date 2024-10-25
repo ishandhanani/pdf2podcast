@@ -1,7 +1,8 @@
 import requests
-from fastapi import FastAPI, File, UploadFile, HTTPException
+from fastapi import FastAPI, File, UploadFile, HTTPException, Form
 from pydantic import BaseModel
 import io
+import json
 
 app = FastAPI()
 
@@ -16,9 +17,21 @@ class TranscriptionRequest(BaseModel):
     model: str
 
 @app.post("/process_pdf")
-async def process_pdf(file: UploadFile = File(...), transcription_params: TranscriptionRequest = None):
+async def process_pdf(
+    file: UploadFile = File(...),
+    transcription_params: str = Form(...)
+):
     if file.content_type != "application/pdf":
         raise HTTPException(status_code=400, detail="Only PDF files are allowed")
+
+    # Parse transcription_params from JSON string
+    try:
+        params = json.loads(transcription_params)
+        transcription_request = TranscriptionRequest(**params)
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Invalid JSON in transcription_params")
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid transcription parameters")
 
     # Step 1: Convert PDF to Markdown
     pdf_response = requests.post(PDF_SERVICE_URL, files={"file": (file.filename, file.file, file.content_type)})
@@ -29,10 +42,10 @@ async def process_pdf(file: UploadFile = File(...), transcription_params: Transc
     # Step 2: Process Markdown with Agent Service
     agent_payload = {
         "markdown": markdown_content,
-        "duration": transcription_params.duration,
-        "speaker_1_name": transcription_params.speaker_1_name,
-        "speaker_2_name": transcription_params.speaker_2_name,
-        "model": transcription_params.model
+        "duration": transcription_request.duration,
+        "speaker_1_name": transcription_request.speaker_1_name,
+        "speaker_2_name": transcription_request.speaker_2_name,
+        "model": transcription_request.model
     }
     agent_response = requests.post(AGENT_SERVICE_URL, json=agent_payload)
     if agent_response.status_code != 200:
