@@ -1,0 +1,8 @@
+fastapi
+python-multipart
+uvicorn
+opencv-python==4.8.0.74
+opencv-contrib-python==4.8.0.74
+torch
+torchvision
+docling==2.2.0
