@@ -12,7 +12,10 @@ def convert_pdf_to_markdown(pdf_path: str) -> str:
     logging.info(f"Converting PDF to Markdown: {pdf_path}")
     converter = DocumentConverter()
     result = converter.convert(pdf_path)
-    return result.document.export_to_markdown()
+    markdown = result.document.export_to_markdown()
+    del converter
+    del result
+    return markdown
 
 @app.post("/convert", response_class=PlainTextResponse)
 async def convert_pdf(file: UploadFile = File(...)):
