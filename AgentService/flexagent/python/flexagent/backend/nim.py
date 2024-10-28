@@ -5,7 +5,8 @@ from typing import Dict, List, Optional
 from .openai import OpenAIBackend
 from .registry import reg
 from .sampling_params import SamplingParams
-
+import logging
+logging.basicConfig(level=logging.INFO)
 
 class NIMBackend(OpenAIBackend):
     """
@@ -51,6 +52,7 @@ class NIMBackend(OpenAIBackend):
         api_base: str = "https://integrate.api.nvidia.com/v1",
     ):
         api_key = api_key or os.getenv("NIM_KEY")
+        self.max_retry = 5
         if not api_key:
             raise ValueError(
                 "NIM API key is required. Set it as NIM_KEY environment variable or pass it explicitly."
@@ -89,7 +91,12 @@ class NIMBackend(OpenAIBackend):
             from data and make predictions or decisions without explicit programming.
         """
         # NIM-specific adjustments can be made here if needed in the future
-        return super().generate(messages, sampling_params)
+        for _ in range(self.max_retry):
+            try:
+                return super().generate(messages, sampling_params)
+            except Exception as e:
+                logging.error(f"Error generating text: {e}")
+        raise Exception("Failed to generate text after multiple retries")
 
 
 @reg("nim")

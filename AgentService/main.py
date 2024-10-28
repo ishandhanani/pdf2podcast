@@ -2,8 +2,9 @@ import jinja2
 import flexagent as fa
 from dotenv import load_dotenv
 from flexagent.backend import BackendConfig
+from flexagent.engine import Value
 from pydantic import BaseModel
-from typing import List, Literal
+from typing import List, Literal, Dict
 import json
 import os
 import time
@@ -74,6 +75,28 @@ Dive deep into each topic, and provide enough details given the time budget, don
                                          
 """)
 
+
+DEEP_DIVE_PROMPT = jinja2.Template("""
+You will be given some content, short ideas or thoughts about the content.
+
+Your task is to expand the content into a detailed and comprehensive explanation, with enough details and examples.
+
+Here is the content
+
+{{text}}
+                                   
+
+
+The topic will be around
+                                   
+{{topic}}
+                                   
+Dive deep into each topic, come up with an outline with topics and subtopics to help fully understand the content.
+Expand the topics, don't add any other topics. Allocate time budget for each topic. Total time budget should be {{ duration }} minutes.
+Focus on the most important topics and ideas, and allocate more time budget to them.
+Avoid introduction and conclusion in the outline, focus on expanding into subtopics.
+""")
+
 TRANSCRIPT_PROMPT = jinja2.Template("""
 Given the transcript of different segments,combine and optimize the transcript to make the flow more natural.
 The content should be strictly following the transcript, and only optimize the flow. Keep all the details, and storytelling contents.
@@ -141,7 +164,8 @@ You should revise the dialogue transcript by adding more details and information
 
 Here is the raw transcript:
 {{ raw_transcript }}
-                                
+
+Critically judge the content to satisfy the following outlines. Make the content to follow the outlines and designs.                              
 {% for segment, duration, descriptions in segments %}
 
 {{ segment }}  Time budget: {{ duration }} minutes, approximately {{ (duration * 180) | int }} words.
@@ -188,6 +212,34 @@ def retry_nim_request(llm, messages, retries=5, sync=True):
         time.sleep(3)
     raise Exception("Failed to get response")
 
+def deep_dive_agent(text: str, segment: Dict[str, str], llm):
+    logging.info(f"Deep diving into topic: {segment['section']}")
+    schema = PodcastOutline.model_json_schema()
+    # raw outline
+    prompt = DEEP_DIVE_PROMPT.render(text=text, topic=segment["descriptions"], duration=segment["duration"])
+    messages = [{"role": "user", "content": prompt}]
+    outline =retry_nim_request(llm, messages)
+
+    # json outline
+    prompt = OUTLINE_PROMPT.render(text=outline, schema=json.dumps(schema, indent=2))
+    messages = [{"role": "user", "content": prompt}]
+    outline_json = json.loads(fa.utils.json_func.extract_json(retry_nim_request(llm, messages)))
+    
+    # print(outline_json)
+    # explore each topic
+    segments = []
+    try:
+        for segment in outline_json["segments"]:
+            prompt = SEGMENT_TRANSCRIPT_PROMPT.render(text=text, duration=segment["duration"], topic=segment["section"], angles="\n".join(segment["descriptions"]))
+            messages = [{"role": "user", "content": prompt}]
+            segments.append(retry_nim_request(llm, messages, sync=False))
+    except Exception as e:
+        logging.error(f"Failed to get segments: {e}")
+        raise e
+    
+    texts = [segment.get() for segment in segments]
+    return Value("\n".join(texts))
+    
 def transcript_agent(text: str,
                           duration: int = 20,
                           speaker_1_name: str = "Donald Trump",
@@ -225,18 +277,28 @@ def transcript_agent(text: str,
 
     outline_json = json.loads(fa.utils.json_func.extract_json(outline))
 
-    # segments
+
+    
+    longest_segment_idx = max(range(len(outline_json["segments"])), 
+                            key=lambda i: outline_json["segments"][i]["duration"])
+
     segments = []
     try:
-        for segment in outline_json["segments"]:
+        for idx, segment in enumerate(outline_json["segments"]):
             logging.info(f"Getting segment: {segment['section']}")
-            prompt = SEGMENT_TRANSCRIPT_PROMPT.render(text=text, duration=segment["duration"], topic=segment["section"], angles="\n".join(segment["descriptions"]))
-            messages = [{"role": "user", "content": prompt}]
-            segments.append(retry_nim_request(llm, messages, sync=False))
+            if idx == longest_segment_idx:
+                ret = deep_dive_agent(text, segment, llm)
+                segments.append(ret)
+            else:
+                prompt = SEGMENT_TRANSCRIPT_PROMPT.render(text=text, duration=segment["duration"], topic=segment["section"], angles="\n".join(segment["descriptions"]))
+                messages = [{"role": "user", "content": prompt}]
+                segments.append(retry_nim_request(llm, messages, sync=False))
     except Exception as e:
         logging.error(f"Failed to get segments: {e}")
         raise e
-    
+
+
+
     try:
         metadata = [
             (segment.get(), info["duration"]) for segment, info in zip(segments, outline_json["segments"])
