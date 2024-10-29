@@ -16,7 +16,6 @@ from pydantic import BaseModel
 
 app = FastAPI()
 
-
 class DialogueEntry(BaseModel):
     text: str
     speaker: Literal["speaker-1", "speaker-2"]
@@ -35,6 +34,7 @@ class PodcastSegment(BaseModel):
 class PodcastOutline(BaseModel):
     title: str
     segments: List[PodcastSegment]
+
 
 
 
@@ -112,7 +112,10 @@ Time budget: {{ duration }} minutes, approximately {{ (duration * 180) | int }} 
 Only return the full transcript, no need to include any other information like time budget or segment name.
 """)
 
-RAW_PODCAST_DIALOGUE_PROMPT = jinja2.Template("""
+
+
+
+RAW_PODCAST_DIALOGUE_PROMPT_v2 = jinja2.Template("""
 Your task is to transform the provided input transcript into a lively, engaging, and informative podcast dialogue. 
 
 There are two speakers, speaker-1 and speaker-2.
@@ -138,50 +141,56 @@ Throughout the script, strive for authenticity in the conversation. Include:
    - Brief personal anecdotes or examples that relate to the topic (within the bounds of the input text)
                  
 Don't lose any information or details in the transcript. It is only format conversion, so strictly follow the transcript.
+                                                 
+This segment is about {{ duration }} minutes, approximately {{ (duration * 180) | int }} words.
+The topic is {{ descriptions }}
                                           
-Reference time budget for each segment:
-
-{% for segment, duration, descriptions in segments %}
-
-{{ segment }}  Time budget: {{ duration }} minutes, approximately {{ (duration * 180) | int }} words.
-{{ descriptions }}
-                                   
-{% endfor %}
-                                          
-For segment with long time budget, you should make the conversation longer by adding more details and storytelling from the transcript.
 You should keep all analogies, stories, examples, and quotes from the transcript.
 
 Here is the transcript:
 {{text}}
                                           
 Only return the full dialogue transcript, no need to include any other information like time budget or segment name.
+Don't add introduction and ending to the dialogue unless it is provided in the transcript.
                                                                   
 """)
 
+
+FUSE_OUTLINE_PROMPT = jinja2.Template("""
+You are given two outlines, one is overall outline, another is sub-outline for one section in the overall outline.
+You need to fuse the two outlines into a new outline, to represent the whole podcast without losing any descriptions in sub sections.
+Ignore the time budget in the sub-outline, and use the time budget in the overall outline.
+Overall outline:
+{{ overall_outline }}
+
+Sub-outline:
+{{ sub_outline }}
+
+Output the new outline with the tree structure.
+
+""")
+
+
 REVISE_PROMPT = jinja2.Template("""
 You are given a podcast dialogue transcript, and a raw transcript of the podcast.
-You should revise the dialogue transcript by adding more details and information from the raw transcript.
-
-Here is the raw transcript:
-{{ raw_transcript }}
-
-Critically judge the content to satisfy the following outlines. Make the content to follow the outlines and designs.                              
-{% for segment, duration, descriptions in segments %}
-
-{{ segment }}  Time budget: {{ duration }} minutes, approximately {{ (duration * 180) | int }} words.
-{{ descriptions }}
-                                   
-{% endfor %}
+You are only allowed to copy information from the raw dialogue transcript to make the conversation more natural and engaging, but exactly follow the outline.
                                 
-For complex concepts, innovations or anything important, you should add more details and examples from the raw transcript.
-Add more explanations and background information to make the conversation more informative.
-Add interruptions and back-and-forth between two speakers to make the conversation more natural.
+Outline:
+{{ outline}}
+
 
 Here is the dialogue transcript:
 {{ dialogue_transcript }}
 
 You need also to break long sentences from either speaker into conversations between two speakers, by inserting more dialogue entries and verbal fillers (e.g., "um")
 Don't let a single speaker talk more than 2 sentences, and break the conversation into multiple exchanges between two speakers.
+                                
+Don't make any explict transition between sections, this is one podcast, and the sections are connected.
+Don't use words like "Welcome back" or "Now we are going to talk about" etc.
+Don't make introductions in the middle of the conversation.
+Merge related topics according to outline and don't repeat same things in different place.
+                                
+Don't lose any information or details from the raw transcript, only make the conversation flow more natural.
 """)
 
 PODCAST_DIALOGUE_PROMPT = jinja2.Template("""
@@ -230,6 +239,7 @@ def deep_dive_agent(text: str, segment: Dict[str, str], llm):
     segments = []
     try:
         for segment in outline_json["segments"]:
+            logging.info(f"Getting subsegment: {segment['section']}")
             prompt = SEGMENT_TRANSCRIPT_PROMPT.render(text=text, duration=segment["duration"], topic=segment["section"], angles="\n".join(segment["descriptions"]))
             messages = [{"role": "user", "content": prompt}]
             segments.append(retry_nim_request(llm, messages, sync=False))
@@ -238,7 +248,7 @@ def deep_dive_agent(text: str, segment: Dict[str, str], llm):
         raise e
     
     texts = [segment.get() for segment in segments]
-    return Value("\n".join(texts))
+    return (Value("\n".join(texts)), outline_json)
     
 def transcript_agent(text: str,
                           duration: int = 20,
@@ -283,12 +293,14 @@ def transcript_agent(text: str,
                             key=lambda i: outline_json["segments"][i]["duration"])
 
     segments = []
+    sub_outline = {}
     try:
         for idx, segment in enumerate(outline_json["segments"]):
             logging.info(f"Getting segment: {segment['section']}")
             if idx == longest_segment_idx:
                 ret = deep_dive_agent(text, segment, llm)
-                segments.append(ret)
+                segments.append(ret[0])
+                sub_outline = ret[1]
             else:
                 prompt = SEGMENT_TRANSCRIPT_PROMPT.render(text=text, duration=segment["duration"], topic=segment["section"], angles="\n".join(segment["descriptions"]))
                 messages = [{"role": "user", "content": prompt}]
@@ -296,47 +308,31 @@ def transcript_agent(text: str,
     except Exception as e:
         logging.error(f"Failed to get segments: {e}")
         raise e
-
-
-
-    try:
-        metadata = [
-            (segment.get(), info["duration"]) for segment, info in zip(segments, outline_json["segments"])
-        ]
-    except Exception as e:
-        logging.error(f"Failed to get metadata: {e}")
-        raise e
     
-    try:
-        logging.info(f"Getting full transcript")
-        prompt = TRANSCRIPT_PROMPT.render(segments=metadata)
-        messages = [{"role": "user", "content": prompt}]
-        full_transcript = retry_nim_request(llm, messages)
-    except Exception as e:
-        logging.error(f"Failed to get full transcript: {e}")
-        raise e
-
-
     # # Now convert the full transcript into a podcast dialogue
     
+    
 
-    metadata = [
-        (info["section"], info["duration"], info["descriptions"]) for info in outline_json["segments"]
-    ]
-    try:
-        logging.info(f"Getting podcast dialogue")
-        prompt = RAW_PODCAST_DIALOGUE_PROMPT.render(
-            text=full_transcript,
-            segments=metadata,
-            speaker_1_name=speaker_1_name,
-            speaker_2_name=speaker_2_name,
-        )
+     ## v2 directly to podcast dialogue per segment
+    segment_transcripts = []
+    for idx, segment in enumerate(outline_json["segments"]):
+        prompt = RAW_PODCAST_DIALOGUE_PROMPT_v2.render(text=segments[idx].get(), duration=segment["duration"], descriptions=segment["descriptions"], speaker_1_name=speaker_1_name, speaker_2_name=speaker_2_name)
         messages = [{"role": "user", "content": prompt}]
-        conversation = retry_nim_request(llm, messages)
-    except Exception as e:
-        logging.error(f"Failed to get podcast dialogue: {e}")
-        raise e
+        segment_transcripts.append(retry_nim_request(llm, messages, sync=False))
 
+    full_transcript = "\n".join([segment.get() for segment in segments])
+    
+    conversation = "\n".join([segment.get() for segment in segment_transcripts])
+
+    # Fuse outline
+    logging.info(f"Fusing outline")
+    try:
+        prompt = FUSE_OUTLINE_PROMPT.render(overall_outline=outline, sub_outline=sub_outline)
+        messages = [{"role": "user", "content": prompt}]
+        full_outline = retry_nim_request(llm, messages)
+    except Exception as e:
+        logging.error(f"Failed to fuse outline: {e}")
+        raise e
 
     schema = Conversation.model_json_schema()
 
@@ -347,8 +343,8 @@ def transcript_agent(text: str,
         logging.info(f"Revising podcast dialogue")
         prompt = REVISE_PROMPT.render(
             raw_transcript=full_transcript,
-        dialogue_transcript=conversation,
-        segments=metadata,
+            dialogue_transcript=conversation,
+            outline=full_outline,
         )
         messages = [{"role": "user", "content": prompt}]
         conversation = retry_nim_request(llm, messages)
@@ -356,6 +352,9 @@ def transcript_agent(text: str,
         logging.error(f"Failed to revise podcast dialogue: {e}")
         raise e
     
+    with open("revised_conversation.md", "w") as f:
+        f.write(conversation)
+
     # convert to podcast dialogue in JSON format
     try:
         logging.info(f"Converting to podcast dialogue")
