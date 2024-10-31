@@ -86,6 +86,13 @@ def extract_json(text):
     # Try to find JSON from code blocks first
     for block in code_blocks:
         json_str = block.strip()
+
+        # Remove any leading lines that are 'json' or similar language identifiers
+        lines = json_str.splitlines()
+        while lines and lines[0].strip().lower() in ['json', 'javascript']:
+            lines.pop(0)
+        json_str = '\n'.join(lines).strip()
+
         try:
             # Validate JSON string without parsing it into an object
             json.loads(json_str)
