@@ -39,11 +39,13 @@ class PodcastOutline(BaseModel):
 
 
 RAW_OUTLINE_PROMPT = jinja2.Template("""
-I want to make the following paper into a podcast transcript for {{ duration }} minutes, to help audience understand background, innovation and impact. 
+I want to make the following paper into a podcast transcript for {{ duration }} minutes, to help audience understand background, innovation, impact and future work. 
 
 Come up the structure of the podcast.
                                  
 {{ text }}
+                                     
+Innovation should be the focus of the podcast, and the most important part of the podcast, with enough details.
                           
 """)
 
