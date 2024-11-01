@@ -18,7 +18,7 @@ def test_combined_api():
         "duration": 20,
         "speaker_1_name": "Kate",
         "speaker_2_name": "Bob",
-        "model": "meta/llama-3.1-405b-instruct"
+        "model": "mistralai/mistral-large-2-instruct"
     }
 
     # Open the PDF file and send it in the request

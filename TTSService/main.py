@@ -5,9 +5,69 @@ import tempfile
 import shutil
 from pathlib import Path
 import logging
+import edge_tts
+import random
+import concurrent.futures as cf
+import io
+
 logging.basicConfig(level=logging.INFO)
 
-def process_tts_request(json_input: str) -> str:
+VOICE_LIST = [
+    "en-US-AvaMultilingualNeural",
+    "en-US-AndrewMultilingualNeural",
+    "en-US-EmmaMultilingualNeural",
+    "en-US-BrianMultilingualNeural",
+]
+
+def convert_text_to_mp3(text: str, voice: str) -> bytes:
+    communicate = edge_tts.Communicate(text, voice)
+    with io.BytesIO() as file:
+        for chunk in communicate.stream_sync():
+            if chunk["type"] == "audio":
+                file.write(chunk["data"])
+        return file.getvalue()
+    
+def process_edge_tts_request(json_input: str) -> str:
+    # Parse the JSON input
+    data = json.loads(json_input)
+    dialogue = data.get('dialogue', [])
+
+    logging.info(f"Processing TTS request with {len(dialogue)} dialogues")
+    
+    # Select random voices for the speakers
+    selected_voices = random.sample(VOICE_LIST, 2)
+    voices = {"speaker-1": selected_voices[0], "speaker-2": selected_voices[1]}
+    
+    # Create a temp folder for the output
+    with tempfile.TemporaryDirectory() as temp_dir:
+        output_file = Path(temp_dir) / "sample.mp3"
+        
+        # Convert all dialogue entries to audio in parallel
+        combined_audio = b""
+        with cf.ThreadPoolExecutor() as executor:
+            futures = [
+                executor.submit(
+                    convert_text_to_mp3, 
+                    entry.get('text', ''), 
+                    voices[entry.get('speaker', 'speaker-1')]
+                )
+                for entry in dialogue
+            ]
+            for future in futures:
+                combined_audio += future.result()
+        
+        # Write the combined audio to file
+        with open(output_file, "wb") as f:
+            f.write(combined_audio)
+        
+        # Copy to final location
+        final_output = Path("sample.mp3")
+        final_output.write_bytes(output_file.read_bytes())
+
+    return str(final_output.absolute())
+
+
+def process_f5_tts_request(json_input: str) -> str:
     # Parse the JSON input
     data = json.loads(json_input)
     dialogue = data.get('dialogue', [])
@@ -82,7 +142,7 @@ app = FastAPI()
 @app.post("/generate_tts")
 async def generate_tts(json_input: dict):
     try:
-        mp3_path = process_tts_request(json.dumps(json_input))
+        mp3_path = process_edge_tts_request(json.dumps(json_input))
         return FileResponse(mp3_path, media_type="audio/mpeg", filename="sample.mp3")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

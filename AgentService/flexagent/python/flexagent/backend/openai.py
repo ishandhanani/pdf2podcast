@@ -79,10 +79,15 @@ class OpenAIBackend(BaseBackend):
             }
             messages = [tool_msg, *messages]
         response = self.client.chat.completions.create(
-            model=self.model_name, messages=messages, *args, **kwargs
+            model=self.model_name, stream=True, messages=messages, *args, **kwargs
         )
 
-        return response.choices[0].message.content.strip()
+        accumulated_content = ""
+        for chunk in response:
+            if chunk.choices[0].delta.content is not None:
+                accumulated_content += chunk.choices[0].delta.content
+
+        return accumulated_content
 
     def __call__(self, *args: Any, **kwds: Any) -> str:
         """
