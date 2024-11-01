@@ -2,6 +2,8 @@ import requests
 import os
 import json
 
+NIM_KEY = os.getenv("NIM_KEY")
+
 def test_combined_api():
     # API endpoint
     url = "http://localhost:8080/process_pdf"
@@ -18,7 +20,8 @@ def test_combined_api():
         "duration": 20,
         "speaker_1_name": "Kate",
         "speaker_2_name": "Bob",
-        "model": "mistralai/mistral-large-2-instruct"
+        "model": "mistralai/mistral-large-2-instruct",
+        "api_key": NIM_KEY
     }
 
     # Open the PDF file and send it in the request

@@ -35,8 +35,7 @@ def process_edge_tts_request(json_input: str) -> str:
     logging.info(f"Processing TTS request with {len(dialogue)} dialogues")
     
     # Select random voices for the speakers
-    selected_voices = random.sample(VOICE_LIST, 2)
-    voices = {"speaker-1": selected_voices[0], "speaker-2": selected_voices[1]}
+    voices = {"speaker-1": "en-US-AndrewMultilingualNeural", "speaker-2": "en-US-EmmaMultilingualNeural"}
     
     # Create a temp folder for the output
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -146,3 +145,15 @@ async def generate_tts(json_input: dict):
         return FileResponse(mp3_path, media_type="audio/mpeg", filename="sample.mp3")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/health")
+async def health():
+    try:
+        # Try to initialize edge_tts
+        random_voice = random.choice(VOICE_LIST)
+        communicate = edge_tts.Communicate("Health check", random_voice)
+        
+        return {
+            "status": "healthy",
+            "voices": VOICE_LIST  # List available voices
+        }

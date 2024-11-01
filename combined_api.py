@@ -3,18 +3,57 @@ from fastapi import FastAPI, File, UploadFile, HTTPException, Form, Response
 from pydantic import BaseModel
 import io
 import json
+import os
 
 app = FastAPI()
 
-PDF_SERVICE_URL = "http://localhost:8000/convert"
-AGENT_SERVICE_URL = "http://localhost:8964/transcribe"
-TTS_SERVICE_URL = "http://localhost:8888/generate_tts"
+PDF_SERVICE_URL = os.getenv("PDF_SERVICE_URL", "http://localhost:8000/convert")
+AGENT_SERVICE_URL = os.getenv("AGENT_SERVICE_URL", "http://localhost:8964/transcribe")
+TTS_SERVICE_URL = os.getenv("TTS_SERVICE_URL", "http://localhost:8888/generate_tts")
 
 class TranscriptionRequest(BaseModel):
     duration: int
     speaker_1_name: str
     speaker_2_name: str
     model: str
+    api_key: str
+
+@app.get("/health")
+async def health():
+    try:
+        # Check all dependent services
+        health_status = {
+            "status": "healthy",
+            "services": {
+                "pdf": False,
+                "agent": False,
+                "tts": False
+            }
+        }
+        
+        # Check PDF service
+        pdf_response = requests.get(f"{PDF_SERVICE_URL}/health", timeout=5)
+        health_status["services"]["pdf"] = pdf_response.status_code == 200
+        
+        # Check Agent service  
+        agent_response = requests.get(f"{AGENT_SERVICE_URL}/health", timeout=5)
+        health_status["services"]["agent"] = agent_response.status_code == 200
+        
+        # Check TTS service
+        tts_response = requests.get(f"{TTS_SERVICE_URL}/health", timeout=5)
+        health_status["services"]["tts"] = tts_response.status_code == 200
+        
+        # Overall status is healthy only if all services are healthy
+        if not all(health_status["services"].values()):
+            health_status["status"] = "degraded"
+            
+        return health_status
+    except Exception as e:
+        return {
+            "status": "unhealthy",
+            "error": str(e),
+            "services": health_status["services"]
+        }
 
 @app.post("/process_pdf")
 async def process_pdf(
@@ -45,7 +84,8 @@ async def process_pdf(
         "duration": transcription_request.duration,
         "speaker_1_name": transcription_request.speaker_1_name,
         "speaker_2_name": transcription_request.speaker_2_name,
-        "model": transcription_request.model
+        "model": transcription_request.model,
+        "api_key": transcription_request.api_key  # Pass through the API key
     }
     agent_response = requests.post(AGENT_SERVICE_URL, json=agent_payload)
     if agent_response.status_code != 200:

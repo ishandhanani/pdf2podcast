@@ -1,14 +1,29 @@
 version: "3.8"
 
 services:
+  api-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    ports:
+      - "8080:8080"
+    environment:
+      - PDF_SERVICE_URL=http://pdf-service:8000/convert
+      - AGENT_SERVICE_URL=http://agent-service:8964/transcribe
+      - TTS_SERVICE_URL=http://tts-service:8888/generate_tts
+    depends_on:
+      - pdf-service
+      - agent-service
+      - tts-service
+    networks:
+      - app-network
+
   agent-service:
     build:
       context: ./AgentService
       dockerfile: Dockerfile
     ports:
       - "8964:8964"
-    environment:
-      - NIM_KEY=${NIM_KEY}
     networks:
       - app-network
 

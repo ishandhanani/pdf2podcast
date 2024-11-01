@@ -253,15 +253,15 @@ def deep_dive_agent(text: str, segment: Dict[str, str], llm):
     return (Value("\n".join(texts)), outline_json)
     
 def transcript_agent(text: str,
-                          duration: int = 20,
-                          speaker_1_name: str = "Donald Trump",
-                          speaker_2_name: str = "Kamala Harris",
-                          model: str = "meta/llama-3.1-405b-instruct"):
-    schema = PodcastOutline.model_json_schema()
+                    duration: int = 20,
+                    speaker_1_name: str = "Donald Trump",
+                    speaker_2_name: str = "Kamala Harris",
+                    model: str = "meta/llama-3.1-405b-instruct",
+                    api_key: str = None):
     backend = BackendConfig(
         backend_type="nim",
         model_name=model,
-        api_key=os.getenv("NIM_KEY"),
+        api_key=api_key,
     )
     llm = fa.ops.LLM().to(backend)
 
@@ -377,9 +377,10 @@ def transcript_agent(text: str,
 class TranscriptionRequest(BaseModel):
     markdown: str
     duration: int = 20
-    speaker_1_name: str = "Kate"
+    speaker_1_name: str = "Kate" 
     speaker_2_name: str = "Bob"
     model: str = "meta/llama-3.1-405b-instruct"
+    api_key: str
 
 @app.post("/transcribe")
 async def transcribe(request: TranscriptionRequest):
@@ -389,11 +390,21 @@ async def transcribe(request: TranscriptionRequest):
             duration=request.duration,
             speaker_1_name=request.speaker_1_name,
             speaker_2_name=request.speaker_2_name,
-            model=request.model
+            model=request.model,
+            api_key=request.api_key  # Pass API key
         )
         return json.loads(result)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+# Add at the beginning with other routes
+
+@app.get("/health")
+async def health():
+    return {
+        "status": "healthy",
+        "version": fa.__version__,  # Return flexagent version
+    }
 
 if __name__ == "__main__":
     load_dotenv()

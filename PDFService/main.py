@@ -34,6 +34,23 @@ async def convert_pdf(file: UploadFile = File(...)):
         # Clean up the temporary file
         os.unlink(temp_file_path)
 
+@app.get("/health")
+async def health():
+    try:
+        # Try to initialize DocumentConverter
+        converter = DocumentConverter()
+        del converter
+        
+        return {
+            "status": "healthy",
+            "service": "pdf-converter"
+        }
+    except Exception as e:
+        return {
+            "status": "unhealthy", 
+            "error": str(e)
+        }
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
