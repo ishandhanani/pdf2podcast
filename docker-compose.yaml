@@ -1,0 +1,49 @@
+version: "3.8"
+
+services:
+  agent-service:
+    build:
+      context: ./AgentService
+      dockerfile: Dockerfile
+    ports:
+      - "8964:8964"
+    environment:
+      - NIM_KEY=${NIM_KEY}
+    networks:
+      - app-network
+
+  pdf-service:
+    build:
+      context: ./PDFService
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    networks:
+      - app-network
+
+  tts-service:
+    build:
+      context: ./TTSService
+      dockerfile: Dockerfile
+    ports:
+      - "8888:8888"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
