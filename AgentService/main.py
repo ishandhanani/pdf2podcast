@@ -257,11 +257,12 @@ def transcript_agent(text: str,
                     speaker_1_name: str = "Donald Trump",
                     speaker_2_name: str = "Kamala Harris",
                     model: str = "meta/llama-3.1-405b-instruct",
-                    api_key: str = None):
+                    api_key: str = None):  # Add api_key parameter
+    schema = PodcastOutline.model_json_schema()
     backend = BackendConfig(
         backend_type="nim",
         model_name=model,
-        api_key=api_key,
+        api_key=api_key,  # Use provided API key instead of env var
     )
     llm = fa.ops.LLM().to(backend)
 

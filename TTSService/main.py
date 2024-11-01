@@ -148,12 +148,7 @@ async def generate_tts(json_input: dict):
 
 @app.get("/health")
 async def health():
-    try:
-        # Try to initialize edge_tts
-        random_voice = random.choice(VOICE_LIST)
-        communicate = edge_tts.Communicate("Health check", random_voice)
-        
-        return {
-            "status": "healthy",
-            "voices": VOICE_LIST  # List available voices
-        }
+    return {
+        "status": "healthy",
+        "voices": VOICE_LIST  # List available voices
+    }
