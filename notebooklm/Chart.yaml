@@ -1,8 +1,13 @@
-name: notebooklm
-description: A generated Helm Chart for notebooklm from Skippbox Kompose
-version: 0.3
 apiVersion: v2
+name: notebooklm
+description: A Helm chart for deploying a mini-service inference endpoint with supporting services
+type: application
+version: "0.4"
 keywords:
-  - notebooklm
-sources:
-home:
+- notebooklm
+- mini-service
+- inference
+annotations:
+  mini-service/entrypoint: api-service
+  mini-service/inference-port: "8002"
+  mini-service/service-port: "8002"

@@ -4,6 +4,7 @@ metadata:
   annotations:
     kompose.cmd: ./kompose convert -c
     kompose.version: 1.34.0 (cbf2835db)
+    mini-service: "true"  # Add this annotation to mark it as mini-service
   labels:
     io.kompose.service: api-service
   name: api-service
@@ -17,6 +18,7 @@ spec:
       annotations:
         kompose.cmd: ./kompose convert -c
         kompose.version: 1.34.0 (cbf2835db)
+        mini-service: "true"  # Add this annotation here too
       labels:
         io.kompose.service: api-service
     spec:
@@ -33,4 +35,5 @@ spec:
           ports:
             - containerPort: 8002
               protocol: TCP
+              name: inference  # Named the port for clarity
       restartPolicy: Always
