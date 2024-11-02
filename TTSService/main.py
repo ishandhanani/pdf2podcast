@@ -20,7 +20,7 @@ ELEVENLABS_VOICES = {
 }
 
 # Configure rate limiting
-MAX_CONCURRENT_REQUESTS = 3  # Maximum number of concurrent requests
+MAX_CONCURRENT_REQUESTS = 5  # Maximum number of concurrent requests
 REQUEST_SEMAPHORE = asyncio.Semaphore(MAX_CONCURRENT_REQUESTS)
 
 class TTSRequest(BaseModel):
