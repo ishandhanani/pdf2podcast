@@ -24,23 +24,23 @@ REQUEST_SEMAPHORE = asyncio.Semaphore(MAX_CONCURRENT_REQUESTS)
 
 class TTSRequest(BaseModel):
     dialogue: List[Dict[str, str]]
-    tts_api_key: str
 
 class TTSService:
     def __init__(self):
         self.output_path = Path("sample.mp3")
         self.thread_pool = ThreadPoolExecutor(max_workers=MAX_CONCURRENT_REQUESTS)
     
-    def _init_elevenlabs(self, tts_api_key: str) -> ElevenLabs:
+    def _init_elevenlabs(self) -> ElevenLabs:
         """Initialize ElevenLabs client with provided API key"""
-        if not tts_api_key:
+        api_key = os.getenv("ELEVENLABS_API_KEY")
+        if not api_key:
             raise ValueError("ElevenLabs API key is required")
-        return ElevenLabs(api_key=tts_api_key)
+        return ElevenLabs(api_key=api_key)
 
-    def _convert_text(self, text: str, voice_id: str, tts_api_key: str) -> bytes:
+    def _convert_text(self, text: str, voice_id: str) -> bytes:
         """Convert text to speech using ElevenLabs with provided API key"""
         try:
-            client = self._init_elevenlabs(tts_api_key)
+            client = self._init_elevenlabs()
             audio_stream = client.text_to_speech.convert(
                 text=text,
                 voice_id=voice_id,
@@ -66,15 +66,15 @@ class TTSService:
             
             combined_audio = b""
             tasks = [
-                (entry.get('text', ''), ELEVENLABS_VOICES[entry.get('speaker', 'speaker-1')], request.tts_api_key)
+                (entry.get('text', ''), ELEVENLABS_VOICES[entry.get('speaker', 'speaker-1')])
                 for entry in request.dialogue
             ]
             
             for i in range(0, len(tasks), MAX_CONCURRENT_REQUESTS):
                 batch = tasks[i:i + MAX_CONCURRENT_REQUESTS]
                 futures = [
-                    self.thread_pool.submit(self._convert_text, text, voice_id, api_key)
-                    for text, voice_id, api_key in batch
+                    self.thread_pool.submit(self._convert_text, text, voice_id)
+                    for text, voice_id in batch
                 ]
                 for future in futures:
                     combined_audio += future.result()
