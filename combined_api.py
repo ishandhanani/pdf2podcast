@@ -5,7 +5,7 @@ import io
 import json
 import os
 
-app = FastAPI()
+app = FastAPI(debug=True)
 
 PDF_SERVICE_URL = os.getenv("PDF_SERVICE_URL", "http://localhost:8000/convert")
 AGENT_SERVICE_URL = os.getenv("AGENT_SERVICE_URL", "http://localhost:8964/transcribe")

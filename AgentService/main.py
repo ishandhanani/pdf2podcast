@@ -14,7 +14,7 @@ logging.basicConfig(level=logging.INFO)
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
-app = FastAPI()
+app = FastAPI(debug=True)
 
 class DialogueEntry(BaseModel):
     text: str
@@ -262,7 +262,8 @@ def transcript_agent(text: str,
     backend = BackendConfig(
         backend_type="nim",
         model_name=model,
-        api_key=api_key,  # Use provided API key instead of env var
+        api_key=api_key,
+        api_base="https://405b-pg7podjpv.brevlab.com"
     )
     llm = fa.ops.LLM().to(backend)
 
@@ -361,7 +362,6 @@ def transcript_agent(text: str,
     # convert to podcast dialogue in JSON format
     try:
         logging.info(f"Converting to podcast dialogue")
-        logging.info(f"Rendering prompt now")
         prompt = PODCAST_DIALOGUE_PROMPT.render(
             text=conversation,
             schema=json.dumps(schema, indent=2),
@@ -369,9 +369,7 @@ def transcript_agent(text: str,
             speaker_2_name=speaker_2_name,
         )
         messages = [{"role": "user", "content": prompt}]
-        logging.info(f"Trying the nim request.")
         conversation = retry_nim_request(llm, messages)
-        logging.info(f"Finished trying the nim request.")
     except Exception as e:
         logging.error(f"Failed to convert to podcast dialogue: {e}")
         raise e
@@ -397,10 +395,9 @@ async def transcribe(request: TranscriptionRequest):
             model=request.model,
             api_key=request.api_key
         )
-        try:
-            return json.loads(result)
-        except Exception as e:
-            raise HTTPException(status_code=503, detail="The JSON part failed")
+        return json.loads(result)
+    except JSONDecodeError:
+        raise HTTPException(status_code=503, detail="Loading the result as JSON failed.")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

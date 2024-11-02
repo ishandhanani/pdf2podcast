@@ -99,7 +99,7 @@ class TTSService:
 
         return self.output_path
 
-app = FastAPI(title="ElevenLabs TTS Service")
+app = FastAPI(title="ElevenLabs TTS Service", debug=True)
 tts_service = TTSService()
 
 @app.post("/generate_tts")
@@ -111,22 +111,22 @@ async def generate_tts(request: TTSRequest):
     TODO: Switch to parallel processing when using production API key by setting
     PARALLEL_PROCESSING to True
     """
-    PARALLEL_PROCESSING = False
+    PARALLEL_PROCESSING = True
     
-    try:
-        if PARALLEL_PROCESSING: 
-            output_path = tts_service.process_parallel(request)
-        else:
-            output_path = tts_service.process_sequential(request)
+    # try:
+    if PARALLEL_PROCESSING: 
+        output_path = tts_service.process_parallel(request)
+    else:
+        output_path = tts_service.process_sequential(request)
 
-        return FileResponse(
-            output_path,
-            media_type="audio/mpeg",
-            filename="output.mp3"
-        )
-    except Exception as e:
-        logger.error(f"Error processing TTS request: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+    return FileResponse(
+        output_path,
+        media_type="audio/mpeg",
+        filename="output.mp3"
+    )
+    # except Exception as e:
+    #     logger.error(f"Error processing TTS request: {str(e)}")
+    #     raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/generate_tts/health")
 async def health():

@@ -20,7 +20,7 @@ def test_combined_api():
         "duration": 20,
         "speaker_1_name": "Blackwell",
         "speaker_2_name": "Hopper",
-        "model": "nvidia/llama-3.1-nemotron-51b-instruct",
+        "model": "meta/llama-3.1-405b-instruct",
         "api_key": NIM_KEY
     }
 

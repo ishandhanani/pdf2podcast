@@ -6,7 +6,7 @@ import os
 import logging
 logging.basicConfig(level=logging.INFO)
 
-app = FastAPI()
+app = FastAPI(debug=True)
 
 def convert_pdf_to_markdown(pdf_path: str) -> str:
     logging.info(f"Converting PDF to Markdown: {pdf_path}")
