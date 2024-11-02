@@ -132,5 +132,5 @@ async def generate_tts(request: TTSRequest):
 async def health():
     return {
         "status": "healthy",
-        "voices": VOICE_LIST  # List available voices
+        "voices": ELEVENLABS_VOICES.keys()  # List available voices
     }
