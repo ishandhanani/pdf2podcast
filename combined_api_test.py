@@ -10,7 +10,7 @@ def test_combined_api():
 
     # Path to a sample PDF file for testing
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    sample_pdf_path = os.path.join(current_dir, "PNP_Proof.pdf")
+    sample_pdf_path = os.path.join(current_dir, "Q2Earnings.pdf")
 
     # Ensure the sample PDF file exists
     assert os.path.exists(sample_pdf_path), f"Sample PDF file not found at {sample_pdf_path}"

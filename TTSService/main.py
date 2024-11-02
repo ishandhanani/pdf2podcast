@@ -1,149 +1,131 @@
 import json
-import os
-import subprocess
-import tempfile
-import shutil
-from pathlib import Path
 import logging
-import edge_tts
-import random
-import concurrent.futures as cf
-import io
+import os
+import tempfile
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
+from typing import Dict, List
 
-logging.basicConfig(level=logging.INFO)
-
-VOICE_LIST = [
-    "en-US-AvaMultilingualNeural",
-    "en-US-AndrewMultilingualNeural",
-    "en-US-EmmaMultilingualNeural",
-    "en-US-BrianMultilingualNeural",
-]
-
-def convert_text_to_mp3(text: str, voice: str) -> bytes:
-    communicate = edge_tts.Communicate(text, voice)
-    with io.BytesIO() as file:
-        for chunk in communicate.stream_sync():
-            if chunk["type"] == "audio":
-                file.write(chunk["data"])
-        return file.getvalue()
-    
-def process_edge_tts_request(json_input: str) -> str:
-    # Parse the JSON input
-    data = json.loads(json_input)
-    dialogue = data.get('dialogue', [])
-
-    logging.info(f"Processing TTS request with {len(dialogue)} dialogues")
-    
-    # Select random voices for the speakers
-    voices = {"speaker-1": "en-US-AndrewMultilingualNeural", "speaker-2": "en-US-EmmaMultilingualNeural"}
-    
-    # Create a temp folder for the output
-    with tempfile.TemporaryDirectory() as temp_dir:
-        output_file = Path(temp_dir) / "sample.mp3"
-        
-        # Convert all dialogue entries to audio in parallel
-        combined_audio = b""
-        with cf.ThreadPoolExecutor() as executor:
-            futures = [
-                executor.submit(
-                    convert_text_to_mp3, 
-                    entry.get('text', ''), 
-                    voices[entry.get('speaker', 'speaker-1')]
-                )
-                for entry in dialogue
-            ]
-            for future in futures:
-                combined_audio += future.result()
-        
-        # Write the combined audio to file
-        with open(output_file, "wb") as f:
-            f.write(combined_audio)
-        
-        # Copy to final location
-        final_output = Path("sample.mp3")
-        final_output.write_bytes(output_file.read_bytes())
-
-    return str(final_output.absolute())
-
-
-def process_f5_tts_request(json_input: str) -> str:
-    # Parse the JSON input
-    data = json.loads(json_input)
-    dialogue = data.get('dialogue', [])
-
-    logging.info(f"Processing TTS request with {len(dialogue)} dialogues")
-    # Step 1: Create a temp folder
-    with tempfile.TemporaryDirectory() as temp_dir:
-        # Step 2 & 3: Convert dialogues and write to output.txt
-        output_txt = Path(temp_dir) / "output.txt"
-        with open(output_txt, "w") as f:
-            for i, entry in enumerate(dialogue):
-                speaker = entry.get('speaker', '')
-                text = entry.get('text', '')
-                if speaker == "speaker-1":
-                    speaker = "main"
-                elif speaker == "speaker-2":
-                    speaker = "town"
-                
-                if i == 0:
-                    f.write(f"{text}\n")
-                else:
-                    f.write(f"[{speaker}]{text}\n")
-
-        # Step 4: Generate config.toml
-        config_toml = Path(temp_dir) / "config.toml"
-        with open(config_toml, "w") as f:
-            f.write("""
-# F5-TTS | E2-TTS
-model = "F5-TTS"
-ref_audio = "/workspace/F5-TTS/src/f5_tts/infer/examples/multi/main.flac"
-# If an empty "", transcribes the reference audio automatically.
-ref_text = ""
-gen_text = ""
-# File with text to generate. Ignores the text above.
-gen_file = "output.txt"
-remove_silence = true
-output_dir = "tests"
-
-[voices.main]
-ref_audio = "/workspace/F5-TTS/src/f5_tts/infer/examples/multi/main.flac"
-ref_text = ""
-
-[voices.town]
-ref_audio = "/workspace/F5-TTS/src/f5_tts/infer/examples/multi/town.flac"
-ref_text = ""
-            """.strip())
-
-        logging.info(f"Running f5-tts_infer-cli with config.toml in {temp_dir}")
-        # Step 5: Run f5-tts_infer-cli
-        subprocess.run(["f5-tts_infer-cli", "-c", "config.toml"], cwd=temp_dir, check=True)
-
-        # Step 6: Wait for subprocess to finish (implicit in the previous step)
-
-        # Step 7: Run ffmpeg
-    
-        tests_dir = Path(temp_dir) / "tests"
-        logging.info(f"Running ffmpeg in {tests_dir}")
-        subprocess.run(["ffmpeg", "-i", "infer_cli_out.wav", "sample.mp3"], cwd=tests_dir, check=True)
-
-        # Step 8: Copy the final output to a known location
-        output_file = Path("sample.mp3")
-        shutil.copy2(tests_dir / "sample.mp3", output_file)
-
-    return str(output_file.absolute())
-
-# FastAPI endpoint
+from elevenlabs.client import ElevenLabs
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
+from pydantic import BaseModel
 
-app = FastAPI()
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+ELEVENLABS_VOICES = {
+    "speaker-1": "iP95p4xoKVk53GoZ742B",  # Chris - casual conversational
+    "speaker-2": "9BWtsMINqrJLrRacOk9x",  # Aria - expressive social media
+}
+
+class TTSRequest(BaseModel):
+    dialogue: List[Dict[str, str]]
+
+class TTSService:
+    def __init__(self):
+        self.output_path = Path("sample.mp3")
+        self.elevenlabs_client = self._init_elevenlabs()
+    
+    def _init_elevenlabs(self) -> ElevenLabs:
+        """Initialize ElevenLabs client"""
+        api_key = os.getenv("ELEVENLABS_API_KEY")
+        if not api_key:
+            raise ValueError("ELEVENLABS_API_KEY environment variable is not set")
+        return ElevenLabs(api_key=api_key)
+
+    def _convert_text(self, text: str, voice_id: str) -> bytes:
+        """Convert text to speech using ElevenLabs"""
+        try:
+            audio_stream = self.elevenlabs_client.text_to_speech.convert(
+                text=text,
+                voice_id=voice_id,
+                model_id="eleven_monolingual_v1",
+                output_format="mp3_44100_128",
+                voice_settings={
+                    "stability": 0.5,
+                    "similarity_boost": 0.75,
+                    "style": 0.0,
+                }
+            )
+            return b"".join(chunk for chunk in audio_stream)
+        except Exception as e:
+            logger.error(f"ElevenLabs API error: {str(e)}")
+            raise
+
+    def process_parallel(self, request: TTSRequest) -> Path:
+        """Process TTS request using ElevenLabs in parallel (for production use)"""
+        logger.info(f"Processing {len(request.dialogue)} dialogues with ElevenLabs (parallel)")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir) / "output.mp3"
+            
+            combined_audio = b""
+            with ThreadPoolExecutor() as executor:
+                futures = [
+                    executor.submit(
+                        self._convert_text,
+                        entry.get('text', ''),
+                        ELEVENLABS_VOICES[entry.get('speaker', 'speaker-1')]
+                    )
+                    for entry in request.dialogue
+                ]
+                for future in futures:
+                    combined_audio += future.result()
+
+            temp_path.write_bytes(combined_audio)
+            self.output_path.write_bytes(temp_path.read_bytes())
+
+        return self.output_path
+
+    def process_sequential(self, request: TTSRequest) -> Path:
+        """Process TTS request using ElevenLabs sequentially (for development use)"""
+        logger.info(f"Processing {len(request.dialogue)} dialogues with ElevenLabs (sequential)")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir) / "output.mp3"
+
+            combined_audio = b""
+            for entry in request.dialogue:
+                text = entry.get('text', '')
+                speaker = entry.get('speaker', 'speaker-1')
+                voice_id = ELEVENLABS_VOICES[speaker]
+
+                audio_bytes = self._convert_text(text, voice_id)
+                combined_audio += audio_bytes
+
+            temp_path.write_bytes(combined_audio)
+            self.output_path.write_bytes(temp_path.read_bytes())
+
+        return self.output_path
+
+app = FastAPI(title="ElevenLabs TTS Service")
+tts_service = TTSService()
 
 @app.post("/generate_tts")
-async def generate_tts(json_input: dict):
+async def generate_tts(request: TTSRequest):
+    """
+    Generate TTS audio from dialogue using ElevenLabs
+    
+    Currently using sequential processing to avoid rate limits.
+    TODO: Switch to parallel processing when using production API key by setting
+    PARALLEL_PROCESSING to True
+    """
+    PARALLEL_PROCESSING = False
+    
     try:
-        mp3_path = process_edge_tts_request(json.dumps(json_input))
-        return FileResponse(mp3_path, media_type="audio/mpeg", filename="sample.mp3")
+        if PARALLEL_PROCESSING: 
+            output_path = tts_service.process_parallel(request)
+        else:
+            output_path = tts_service.process_sequential(request)
+
+        return FileResponse(
+            output_path,
+            media_type="audio/mpeg",
+            filename="output.mp3"
+        )
     except Exception as e:
+        logger.error(f"Error processing TTS request: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/generate_tts/health")

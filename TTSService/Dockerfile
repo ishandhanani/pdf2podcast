@@ -21,7 +21,7 @@ RUN git clone https://github.com/SWivid/F5-TTS.git \
     && pip install -e .[eval]
 
 
-RUN pip install fastapi uvicorn edge-tts
+RUN pip install fastapi uvicorn edge-tts elevenlabs
 
 # Download the model
 RUN f5-tts_infer-cli
