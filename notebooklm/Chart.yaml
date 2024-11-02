@@ -1,6 +1,6 @@
 name: notebooklm
 description: A generated Helm Chart for notebooklm from Skippbox Kompose
-version: 0.0.1
+version: 0.2
 apiVersion: v2
 keywords:
   - notebooklm
