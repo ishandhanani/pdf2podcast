@@ -1,7 +1,7 @@
 import requests
 import os
 
-PDF_SERVICE_URL = os.getenv("PDF_SERVICE_URL", "http://localhost:8000/convert")
+PDF_SERVICE_URL = os.getenv("PDF_SERVICE_URL", "http://localhost:8003/convert")
 
 def test_convert_pdf_endpoint():
     # Path to a sample PDF file for testing

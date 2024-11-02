@@ -20,10 +20,12 @@ spec:
       labels:
         io.kompose.service: pdf-service
     spec:
+      imagePullSecrets:
+        - name: {{ .Values.ngcImagePullSecretName }}
       containers:
         - image: nvcr.io/pfteb4cqjzrs/playground/pdf-service:0.2
           name: pdf-service
           ports:
-            - containerPort: 8000
+            - containerPort: 8003
               protocol: TCP
       restartPolicy: Always

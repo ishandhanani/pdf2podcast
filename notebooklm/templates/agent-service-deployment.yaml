@@ -20,6 +20,8 @@ spec:
       labels:
         io.kompose.service: agent-service
     spec:
+      imagePullSecrets:
+        - name: {{ .Values.ngcImagePullSecretName }}
       containers:
         - image: nvcr.io/pfteb4cqjzrs/playground/agent-service:0.2
           name: agent-service

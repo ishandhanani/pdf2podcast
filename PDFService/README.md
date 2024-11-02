@@ -2,4 +2,4 @@
 docker build -t pdf-conversion-service .
 
 # Run the Docker container
-docker run --gpus all -p 8000:8000 pdf-conversion-service
+docker run --gpus all -p 8003:8003 pdf-conversion-service

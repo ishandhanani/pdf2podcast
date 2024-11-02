@@ -8,7 +8,7 @@ services:
     ports:
       - "8002:8002"
     environment:
-      - PDF_SERVICE_URL=http://pdf-service:8000/convert
+      - PDF_SERVICE_URL=http://pdf-service:8003/convert
       - AGENT_SERVICE_URL=http://agent-service:8964/transcribe
       - TTS_SERVICE_URL=http://tts-service:8888/generate_tts
     depends_on:
@@ -32,14 +32,14 @@ services:
       context: ./PDFService
       dockerfile: Dockerfile
     ports:
-      - "8000:8000"
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
+      - "8003:8003"
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
     networks:
       - app-network
 
@@ -49,13 +49,13 @@ services:
       dockerfile: Dockerfile
     ports:
       - "8888:8888"
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
     networks:
       - app-network
 

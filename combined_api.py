@@ -7,7 +7,7 @@ import os
 
 app = FastAPI(debug=True)
 
-PDF_SERVICE_URL = os.getenv("PDF_SERVICE_URL", "http://localhost:8000/convert")
+PDF_SERVICE_URL = os.getenv("PDF_SERVICE_URL", "http://localhost:8003/convert")
 AGENT_SERVICE_URL = os.getenv("AGENT_SERVICE_URL", "http://localhost:8964/transcribe")
 TTS_SERVICE_URL = os.getenv("TTS_SERVICE_URL", "http://localhost:8888/generate_tts")
 

@@ -22,12 +22,14 @@ spec:
       labels:
         io.kompose.service: api-service
     spec:
+      imagePullSecrets:
+        - name: {{ .Values.ngcImagePullSecretName }}
       containers:
         - env:
             - name: AGENT_SERVICE_URL
               value: http://agent-service:8964/transcribe
             - name: PDF_SERVICE_URL
-              value: http://pdf-service:8000/convert
+              value: http://pdf-service:8003/convert
             - name: TTS_SERVICE_URL
               value: http://tts-service:8888/generate_tts
           image: nvcr.io/pfteb4cqjzrs/playground/api-service:0.2

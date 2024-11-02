@@ -9,8 +9,8 @@ metadata:
   name: pdf-service
 spec:
   ports:
-    - name: "8000"
-      port: 8000
-      targetPort: 8000
+    - name: "8003"
+      port: 8003
+      targetPort: 8003
   selector:
     io.kompose.service: pdf-service

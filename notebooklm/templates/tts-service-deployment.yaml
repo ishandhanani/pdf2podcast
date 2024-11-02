@@ -20,6 +20,8 @@ spec:
       labels:
         io.kompose.service: tts-service
     spec:
+      imagePullSecrets:
+        - name: {{ .Values.ngcImagePullSecretName }}
       containers:
         - image: nvcr.io/pfteb4cqjzrs/playground/tts-service:0.2
           name: tts-service
