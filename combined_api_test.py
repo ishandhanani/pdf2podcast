@@ -3,6 +3,7 @@ import os
 import json
 
 NIM_KEY = os.getenv("NIM_KEY")
+TTS_KEY = os.getenv("ELEVENLABS_API_KEY")
 
 def test_combined_api():
     # API endpoint
@@ -10,7 +11,7 @@ def test_combined_api():
 
     # Path to a sample PDF file for testing
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    sample_pdf_path = os.path.join(current_dir, "Q2Earnings.pdf")
+    sample_pdf_path = os.path.join(current_dir, "sample.pdf")
 
     # Ensure the sample PDF file exists
     assert os.path.exists(sample_pdf_path), f"Sample PDF file not found at {sample_pdf_path}"
@@ -21,7 +22,8 @@ def test_combined_api():
         "speaker_1_name": "Blackwell",
         "speaker_2_name": "Hopper",
         "model": "meta/llama-3.1-405b-instruct",
-        "api_key": NIM_KEY
+        "nim_api_key": NIM_KEY,
+        "tts_api_key": TTS_KEY,
     }
 
     # Open the PDF file and send it in the request

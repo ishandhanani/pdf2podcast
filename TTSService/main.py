@@ -19,31 +19,29 @@ ELEVENLABS_VOICES = {
     "speaker-2": "9BWtsMINqrJLrRacOk9x",  # Aria - expressive social media
 }
 
-# Configure rate limiting
-MAX_CONCURRENT_REQUESTS = 5  # Maximum number of concurrent requests
+MAX_CONCURRENT_REQUESTS = 5
 REQUEST_SEMAPHORE = asyncio.Semaphore(MAX_CONCURRENT_REQUESTS)
 
 class TTSRequest(BaseModel):
     dialogue: List[Dict[str, str]]
+    tts_api_key: str
 
 class TTSService:
     def __init__(self):
         self.output_path = Path("sample.mp3")
-        self.elevenlabs_client = self._init_elevenlabs()
-        # Limit concurrent threads in the thread pool
         self.thread_pool = ThreadPoolExecutor(max_workers=MAX_CONCURRENT_REQUESTS)
     
-    def _init_elevenlabs(self) -> ElevenLabs:
-        """Initialize ElevenLabs client"""
-        api_key = os.getenv("ELEVENLABS_API_KEY")
-        if not api_key:
-            raise ValueError("ELEVENLABS_API_KEY environment variable is not set")
-        return ElevenLabs(api_key=api_key)
+    def _init_elevenlabs(self, tts_api_key: str) -> ElevenLabs:
+        """Initialize ElevenLabs client with provided API key"""
+        if not tts_api_key:
+            raise ValueError("ElevenLabs API key is required")
+        return ElevenLabs(api_key=tts_api_key)
 
-    def _convert_text(self, text: str, voice_id: str) -> bytes:
-        """Convert text to speech using ElevenLabs"""
+    def _convert_text(self, text: str, voice_id: str, tts_api_key: str) -> bytes:
+        """Convert text to speech using ElevenLabs with provided API key"""
         try:
-            audio_stream = self.elevenlabs_client.text_to_speech.convert(
+            client = self._init_elevenlabs(tts_api_key)
+            audio_stream = client.text_to_speech.convert(
                 text=text,
                 voice_id=voice_id,
                 model_id="eleven_monolingual_v1",
@@ -67,42 +65,19 @@ class TTSService:
             temp_path = Path(temp_dir) / "output.mp3"
             
             combined_audio = b""
-            # Convert to list of tuples for easier processing
             tasks = [
-                (entry.get('text', ''), ELEVENLABS_VOICES[entry.get('speaker', 'speaker-1')])
+                (entry.get('text', ''), ELEVENLABS_VOICES[entry.get('speaker', 'speaker-1')], request.tts_api_key)
                 for entry in request.dialogue
             ]
             
-            # Process in batches to maintain rate limits
             for i in range(0, len(tasks), MAX_CONCURRENT_REQUESTS):
                 batch = tasks[i:i + MAX_CONCURRENT_REQUESTS]
                 futures = [
-                    self.thread_pool.submit(self._convert_text, text, voice_id)
-                    for text, voice_id in batch
+                    self.thread_pool.submit(self._convert_text, text, voice_id, api_key)
+                    for text, voice_id, api_key in batch
                 ]
                 for future in futures:
                     combined_audio += future.result()
-
-            temp_path.write_bytes(combined_audio)
-            self.output_path.write_bytes(temp_path.read_bytes())
-
-        return self.output_path
-
-    async def process_sequential(self, request: TTSRequest) -> Path:
-        """Process TTS request using ElevenLabs sequentially"""
-        logger.info(f"Processing {len(request.dialogue)} dialogues with ElevenLabs (sequential)")
-
-        with tempfile.TemporaryDirectory() as temp_dir:
-            temp_path = Path(temp_dir) / "output.mp3"
-
-            combined_audio = b""
-            for entry in request.dialogue:
-                text = entry.get('text', '')
-                speaker = entry.get('speaker', 'speaker-1')
-                voice_id = ELEVENLABS_VOICES[speaker]
-
-                audio_bytes = self._convert_text(text, voice_id)
-                combined_audio += audio_bytes
 
             temp_path.write_bytes(combined_audio)
             self.output_path.write_bytes(temp_path.read_bytes())
@@ -120,21 +95,11 @@ async def get_request_semaphore():
 @app.post("/generate_tts")
 async def generate_tts(
     request: TTSRequest,
-    _: None = Depends(get_request_semaphore)  # Add rate limiting dependency
+    _: None = Depends(get_request_semaphore)
 ):
-    """
-    Generate TTS audio from dialogue using ElevenLabs
-    
-    Rate-limited to MAX_CONCURRENT_REQUESTS concurrent requests
-    """
-    PARALLEL_PROCESSING = True
-    
+    """Generate TTS audio from dialogue using ElevenLabs"""    
     try:
-        if PARALLEL_PROCESSING:
-            output_path = await tts_service.process_parallel(request)
-        else:
-            output_path = await tts_service.process_sequential(request)
-
+        output_path = await tts_service.process_parallel(request)
         return FileResponse(
             output_path,
             media_type="audio/mpeg",
@@ -148,6 +113,6 @@ async def generate_tts(
 async def health():
     return {
         "status": "healthy",
-        "voices": list(ELEVENLABS_VOICES.keys()),  # List available voices
-        "max_concurrent_requests": MAX_CONCURRENT_REQUESTS  # Show configuration
+        "voices": list(ELEVENLABS_VOICES.keys()),
+        "max_concurrent_requests": MAX_CONCURRENT_REQUESTS
     }

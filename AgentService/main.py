@@ -257,12 +257,12 @@ def transcript_agent(text: str,
                     speaker_1_name: str = "Donald Trump",
                     speaker_2_name: str = "Kamala Harris",
                     model: str = "meta/llama-3.1-405b-instruct",
-                    api_key: str = None):  # Add api_key parameter
+                    nim_api_key: str = None):
     schema = PodcastOutline.model_json_schema()
     backend = BackendConfig(
         backend_type="nim",
         model_name=model,
-        api_key=api_key,
+        api_key=nim_api_key,
         api_base="https://405b-pg7podjpv.brevlab.com/v1"
     )
     llm = fa.ops.LLM().to(backend)
@@ -382,7 +382,7 @@ class TranscriptionRequest(BaseModel):
     speaker_1_name: str = "Bob" 
     speaker_2_name: str = "Kate"
     model: str = "meta/llama-3.1-405b-instruct"
-    api_key: str
+    nim_api_key: str
 
 @app.post("/transcribe")
 async def transcribe(request: TranscriptionRequest):
@@ -393,7 +393,7 @@ async def transcribe(request: TranscriptionRequest):
             speaker_1_name=request.speaker_1_name,
             speaker_2_name=request.speaker_2_name,
             model=request.model,
-            api_key=request.api_key
+            nim_api_key=request.nim_api_key
         )
         return json.loads(result)
     except json.JSONDecodeError:

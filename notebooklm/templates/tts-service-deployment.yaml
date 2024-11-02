@@ -21,10 +21,7 @@ spec:
         io.kompose.service: tts-service
     spec:
       containers:
-        - env:
-            - name: ELEVENLABS_API_KEY
-              value: sk_aa6637a992e54749f52dd2cd3ef761acddb77093e378c242
-          image: tts-service
+        - image: nvcr.io/pfteb4cqjzrs/playground/tts-service:0.2
           name: tts-service
           ports:
             - containerPort: 8888

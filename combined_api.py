@@ -16,12 +16,12 @@ class TranscriptionRequest(BaseModel):
     speaker_1_name: str
     speaker_2_name: str
     model: str
-    api_key: str
+    nim_api_key: str
+    tts_api_key: str
 
 @app.get("/health")
 async def health():
     try:
-        # Check all dependent services
         health_status = {
             "status": "healthy",
             "services": {
@@ -31,19 +31,15 @@ async def health():
             }
         }
         
-        # Check PDF service
         pdf_response = requests.get(f"{PDF_SERVICE_URL}/health", timeout=5)
         health_status["services"]["pdf"] = pdf_response.status_code == 200
         
-        # Check Agent service  
         agent_response = requests.get(f"{AGENT_SERVICE_URL}/health", timeout=5)
         health_status["services"]["agent"] = agent_response.status_code == 200
         
-        # Check TTS service
         tts_response = requests.get(f"{TTS_SERVICE_URL}/health", timeout=5)
         health_status["services"]["tts"] = tts_response.status_code == 200
         
-        # Overall status is healthy only if all services are healthy
         if not all(health_status["services"].values()):
             health_status["status"] = "degraded"
             
@@ -63,7 +59,6 @@ async def process_pdf(
     if file.content_type != "application/pdf":
         raise HTTPException(status_code=400, detail="Only PDF files are allowed")
 
-    # Parse transcription_params from JSON string
     try:
         params = json.loads(transcription_params)
         transcription_request = TranscriptionRequest(**params)
@@ -85,19 +80,22 @@ async def process_pdf(
         "speaker_1_name": transcription_request.speaker_1_name,
         "speaker_2_name": transcription_request.speaker_2_name,
         "model": transcription_request.model,
-        "api_key": transcription_request.api_key  # Pass through the API key
+        "nim_api_key": transcription_request.nim_api_key  # Pass NIM API key
     }
     agent_response = requests.post(AGENT_SERVICE_URL, json=agent_payload)
     if agent_response.status_code != 200:
         raise HTTPException(status_code=500, detail="Agent processing failed")
     agent_result = agent_response.json()
 
-    # Step 3: Generate TTS
-    tts_response = requests.post(TTS_SERVICE_URL, json=agent_result)
+    # Step 3: Generate TTS with API key
+    tts_payload = {
+        "dialogue": agent_result["dialogue"],
+        "tts_api_key": transcription_request.tts_api_key  # Pass TTS API key
+    }
+    tts_response = requests.post(TTS_SERVICE_URL, json=tts_payload)
     if tts_response.status_code != 200:
         raise HTTPException(status_code=500, detail="TTS generation failed")
 
-    # Return the audio file
     return Response(content=tts_response.content, media_type="audio/mpeg")
 
 if __name__ == "__main__":

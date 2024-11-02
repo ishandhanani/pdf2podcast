@@ -21,7 +21,7 @@ spec:
         io.kompose.service: pdf-service
     spec:
       containers:
-        - image: pdf-service
+        - image: nvcr.io/pfteb4cqjzrs/playground/pdf-service:0.2
           name: pdf-service
           ports:
             - containerPort: 8000

@@ -28,7 +28,7 @@ spec:
               value: http://pdf-service:8000/convert
             - name: TTS_SERVICE_URL
               value: http://tts-service:8888/generate_tts
-          image: api-service
+          image: nvcr.io/pfteb4cqjzrs/playground/api-service:0.2
           name: api-service
           ports:
             - containerPort: 8002

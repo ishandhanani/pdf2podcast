@@ -49,8 +49,6 @@ services:
       dockerfile: Dockerfile
     ports:
       - "8888:8888"
-    environment:
-      - ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY}
     deploy:
       resources:
         reservations:
