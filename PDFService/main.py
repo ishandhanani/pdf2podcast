@@ -34,7 +34,7 @@ async def convert_pdf(file: UploadFile = File(...)):
         # Clean up the temporary file
         os.unlink(temp_file_path)
 
-@app.get("/health")
+@app.get("/convert/health")
 async def health():
     try:
         # Try to initialize DocumentConverter

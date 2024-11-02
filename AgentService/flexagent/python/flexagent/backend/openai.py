@@ -78,6 +78,7 @@ class OpenAIBackend(BaseBackend):
                 "content": kwargs["tools"]
             }
             messages = [tool_msg, *messages]
+        print(f"{messages=}")
         response = self.client.chat.completions.create(
             model=self.model_name, stream=True, messages=messages, *args, **kwargs
         )

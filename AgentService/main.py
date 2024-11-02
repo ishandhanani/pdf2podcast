@@ -361,6 +361,7 @@ def transcript_agent(text: str,
     # convert to podcast dialogue in JSON format
     try:
         logging.info(f"Converting to podcast dialogue")
+        logging.info(f"Rendering prompt now")
         prompt = PODCAST_DIALOGUE_PROMPT.render(
             text=conversation,
             schema=json.dumps(schema, indent=2),
@@ -368,7 +369,9 @@ def transcript_agent(text: str,
             speaker_2_name=speaker_2_name,
         )
         messages = [{"role": "user", "content": prompt}]
+        logging.info(f"Trying the nim request.")
         conversation = retry_nim_request(llm, messages)
+        logging.info(f"Finished trying the nim request.")
     except Exception as e:
         logging.error(f"Failed to convert to podcast dialogue: {e}")
         raise e
@@ -378,8 +381,8 @@ def transcript_agent(text: str,
 class TranscriptionRequest(BaseModel):
     markdown: str
     duration: int = 20
-    speaker_1_name: str = "Kate" 
-    speaker_2_name: str = "Bob"
+    speaker_1_name: str = "Bob" 
+    speaker_2_name: str = "Kate"
     model: str = "meta/llama-3.1-405b-instruct"
     api_key: str
 
@@ -392,15 +395,18 @@ async def transcribe(request: TranscriptionRequest):
             speaker_1_name=request.speaker_1_name,
             speaker_2_name=request.speaker_2_name,
             model=request.model,
-            api_key=request.api_key  # Pass API key
+            api_key=request.api_key
         )
-        return json.loads(result)
+        try:
+            return json.loads(result)
+        except Exception as e:
+            raise HTTPException(status_code=503, detail="The JSON part failed")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 # Add at the beginning with other routes
 
-@app.get("/health")
+@app.get("/transcribe/health")
 async def health():
     return {
         "status": "healthy",

@@ -146,7 +146,7 @@ async def generate_tts(json_input: dict):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/health")
+@app.get("/generate_tts/health")
 async def health():
     return {
         "status": "healthy",
