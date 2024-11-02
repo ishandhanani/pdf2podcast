@@ -24,6 +24,8 @@ services:
       dockerfile: Dockerfile
     ports:
       - "8964:8964"
+    environment:
+      - NIM_KEY=${NIM_KEY}
     networks:
       - app-network
 
@@ -49,6 +51,8 @@ services:
       dockerfile: Dockerfile
     ports:
       - "8888:8888"
+    environment:
+      - ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY}
     # deploy:
     #   resources:
     #     reservations:
