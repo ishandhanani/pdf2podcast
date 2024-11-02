@@ -4,7 +4,7 @@ import os
 
 def test_transcribe_api():
     # API endpoint
-    url = "http://localhost:8964/transcribe"
+    AGENT_SERVICE_URL = os.getenv("AGENT_SERVICE_URL", "http://localhost:8964/transcribe")
 
     # Load markdown content from file
     with open("sample.md", "r") as file:
@@ -20,7 +20,7 @@ def test_transcribe_api():
     }
 
     # Send POST request
-    response = requests.post(url, json=payload)
+    response = requests.post(AGENT_SERVICE_URL, json=payload)
 
     # Check if the request was successful
     assert response.status_code == 200, f"Expected status code 200, but got {response.status_code}"

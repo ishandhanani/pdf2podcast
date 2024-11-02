@@ -1,16 +1,16 @@
 import requests
 import json
-
+import os
 def test_tts_api():
     # API endpoint URL
-    url = "http://localhost:8888/generate_tts"
+    TTS_SERVICE_URL = os.getenv("TTS_SERVICE_URL", "http://localhost:8888/generate_tts")
 
     # Load sample JSON data
     with open("sample.json", "r") as f:
         json_data = json.load(f)
 
     # Make POST request to the API
-    response = requests.post(url, json=json_data)
+    response = requests.post(TTS_SERVICE_URL, json=json_data)
 
     # Check if the request was successful
     if response.status_code == 200:

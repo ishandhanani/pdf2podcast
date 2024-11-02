@@ -2,7 +2,7 @@ import pytest
 import requests
 import os
 
-BASE_URL = "http://localhost:8000"  # Adjust this if your server runs on a different address
+PDF_SERVICE_URL = os.getenv("PDF_SERVICE_URL", "http://localhost:8000/convert")  # Adjust this if your server runs on a different address
 
 def test_convert_pdf_endpoint():
     # Path to a sample PDF file for testing
@@ -15,7 +15,7 @@ def test_convert_pdf_endpoint():
     # Open the PDF file and send it in the request
     with open(sample_pdf_path, "rb") as pdf_file:
         files = {"file": ("sample.pdf", pdf_file, "application/pdf")}
-        response = requests.post(f"{BASE_URL}/convert", files=files)
+        response = requests.post(PDF_SERVICE_URL, files=files)
 
     # Check if the request was successful
     assert response.status_code == 200
@@ -34,7 +34,7 @@ def test_convert_pdf_endpoint():
 def test_convert_pdf_endpoint_invalid_file():
     # Try to upload a non-PDF file
     files = {"file": ("test.txt", b"This is not a PDF file", "text/plain")}
-    response = requests.post(f"{BASE_URL}/convert", files=files)
+    response = requests.post(PDF_SERVICE_URL, files=files)
 
     # Check if the request was unsuccessful
     assert response.status_code != 200
