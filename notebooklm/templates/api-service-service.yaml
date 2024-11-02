@@ -9,8 +9,8 @@ metadata:
   name: api-service
 spec:
   ports:
-    - name: "8080"
-      port: 8080
-      targetPort: 8080
+    - name: "8002"
+      port: 8002
+      targetPort: 8002
   selector:
     io.kompose.service: api-service
