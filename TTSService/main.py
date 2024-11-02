@@ -5,11 +5,11 @@ import tempfile
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Dict, List
-
-from elevenlabs.client import ElevenLabs
-from fastapi import FastAPI, HTTPException
+import asyncio
+from fastapi import FastAPI, HTTPException, Depends
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
+from elevenlabs.client import ElevenLabs
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -19,6 +19,10 @@ ELEVENLABS_VOICES = {
     "speaker-2": "9BWtsMINqrJLrRacOk9x",  # Aria - expressive social media
 }
 
+# Configure rate limiting
+MAX_CONCURRENT_REQUESTS = 3  # Maximum number of concurrent requests
+REQUEST_SEMAPHORE = asyncio.Semaphore(MAX_CONCURRENT_REQUESTS)
+
 class TTSRequest(BaseModel):
     dialogue: List[Dict[str, str]]
 
@@ -26,6 +30,8 @@ class TTSService:
     def __init__(self):
         self.output_path = Path("sample.mp3")
         self.elevenlabs_client = self._init_elevenlabs()
+        # Limit concurrent threads in the thread pool
+        self.thread_pool = ThreadPoolExecutor(max_workers=MAX_CONCURRENT_REQUESTS)
     
     def _init_elevenlabs(self) -> ElevenLabs:
         """Initialize ElevenLabs client"""
@@ -53,22 +59,26 @@ class TTSService:
             logger.error(f"ElevenLabs API error: {str(e)}")
             raise
 
-    def process_parallel(self, request: TTSRequest) -> Path:
-        """Process TTS request using ElevenLabs in parallel (for production use)"""
+    async def process_parallel(self, request: TTSRequest) -> Path:
+        """Process TTS request using ElevenLabs in parallel with limited concurrency"""
         logger.info(f"Processing {len(request.dialogue)} dialogues with ElevenLabs (parallel)")
 
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir) / "output.mp3"
             
             combined_audio = b""
-            with ThreadPoolExecutor() as executor:
+            # Convert to list of tuples for easier processing
+            tasks = [
+                (entry.get('text', ''), ELEVENLABS_VOICES[entry.get('speaker', 'speaker-1')])
+                for entry in request.dialogue
+            ]
+            
+            # Process in batches to maintain rate limits
+            for i in range(0, len(tasks), MAX_CONCURRENT_REQUESTS):
+                batch = tasks[i:i + MAX_CONCURRENT_REQUESTS]
                 futures = [
-                    executor.submit(
-                        self._convert_text,
-                        entry.get('text', ''),
-                        ELEVENLABS_VOICES[entry.get('speaker', 'speaker-1')]
-                    )
-                    for entry in request.dialogue
+                    self.thread_pool.submit(self._convert_text, text, voice_id)
+                    for text, voice_id in batch
                 ]
                 for future in futures:
                     combined_audio += future.result()
@@ -78,8 +88,8 @@ class TTSService:
 
         return self.output_path
 
-    def process_sequential(self, request: TTSRequest) -> Path:
-        """Process TTS request using ElevenLabs sequentially (for development use)"""
+    async def process_sequential(self, request: TTSRequest) -> Path:
+        """Process TTS request using ElevenLabs sequentially"""
         logger.info(f"Processing {len(request.dialogue)} dialogues with ElevenLabs (sequential)")
 
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -102,22 +112,28 @@ class TTSService:
 app = FastAPI(title="ElevenLabs TTS Service", debug=True)
 tts_service = TTSService()
 
+async def get_request_semaphore():
+    """Dependency to manage concurrent requests"""
+    async with REQUEST_SEMAPHORE:
+        yield
+
 @app.post("/generate_tts")
-async def generate_tts(request: TTSRequest):
+async def generate_tts(
+    request: TTSRequest,
+    _: None = Depends(get_request_semaphore)  # Add rate limiting dependency
+):
     """
     Generate TTS audio from dialogue using ElevenLabs
     
-    Currently using sequential processing to avoid rate limits.
-    TODO: Switch to parallel processing when using production API key by setting
-    PARALLEL_PROCESSING to True
+    Rate-limited to MAX_CONCURRENT_REQUESTS concurrent requests
     """
     PARALLEL_PROCESSING = True
     
     try:
-        if PARALLEL_PROCESSING: 
-            output_path = tts_service.process_parallel(request)
+        if PARALLEL_PROCESSING:
+            output_path = await tts_service.process_parallel(request)
         else:
-            output_path = tts_service.process_sequential(request)
+            output_path = await tts_service.process_sequential(request)
 
         return FileResponse(
             output_path,
@@ -132,5 +148,6 @@ async def generate_tts(request: TTSRequest):
 async def health():
     return {
         "status": "healthy",
-        "voices": ELEVENLABS_VOICES.keys()  # List available voices
+        "voices": list(ELEVENLABS_VOICES.keys()),  # List available voices
+        "max_concurrent_requests": MAX_CONCURRENT_REQUESTS  # Show configuration
     }
