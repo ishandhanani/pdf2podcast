@@ -4,4 +4,4 @@ WORKDIR /app
 COPY ./combined_api.py /app/
 RUN pip install fastapi uvicorn python-multipart requests
 
-CMD ["uvicorn", "combined_api:app", "--host", "0.0.0.0", "--port", "8080"]
+CMD ["uvicorn", "combined_api:app", "--host", "0.0.0.0", "--port", "8002"]

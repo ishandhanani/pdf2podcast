@@ -396,7 +396,7 @@ async def transcribe(request: TranscriptionRequest):
             api_key=request.api_key
         )
         return json.loads(result)
-    except JSONDecodeError:
+    except json.JSONDecodeError:
         raise HTTPException(status_code=503, detail="Loading the result as JSON failed.")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

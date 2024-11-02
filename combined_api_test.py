@@ -6,7 +6,7 @@ NIM_KEY = os.getenv("NIM_KEY")
 
 def test_combined_api():
     # API endpoint
-    url = "http://localhost:8080/process_pdf"
+    url = "http://localhost:8002/process_pdf"
 
     # Path to a sample PDF file for testing
     current_dir = os.path.dirname(os.path.abspath(__file__))

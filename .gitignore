@@ -4,3 +4,4 @@ tmp
 .venv
 output.mp3
 kompose
+get_helm.sh

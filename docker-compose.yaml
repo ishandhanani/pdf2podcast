@@ -6,7 +6,7 @@ services:
       context: .
       dockerfile: Dockerfile.api
     ports:
-      - "8080:8080"
+      - "8002:8002"
     environment:
       - PDF_SERVICE_URL=http://pdf-service:8000/convert
       - AGENT_SERVICE_URL=http://agent-service:8964/transcribe
