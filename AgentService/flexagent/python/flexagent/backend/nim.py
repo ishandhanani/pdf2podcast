@@ -49,7 +49,7 @@ class NIMBackend(OpenAIBackend):
         self,
         model_name: str,
         api_key: Optional[str] = None,
-        api_base: str = "https://integrate.api.nvidia.com/v1",
+        api_base: str = "https://405b-pg7podjpv.brevlab.com/v1",
     ):
         api_key = api_key or os.getenv("NIM_KEY")
         self.max_retry = 5

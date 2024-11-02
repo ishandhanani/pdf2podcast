@@ -13,7 +13,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies
-RUN pip install --no-cache-dir fastapi uvicorn pydantic python-dotenv jinja2
+RUN pip install fastapi uvicorn pydantic python-dotenv jinja2
 
 # Install flexagent
 COPY flexagent /app/flexagent

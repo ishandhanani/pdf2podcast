@@ -263,7 +263,7 @@ def transcript_agent(text: str,
         backend_type="nim",
         model_name=model,
         api_key=api_key,
-        api_base="https://405b-pg7podjpv.brevlab.com"
+        api_base="https://405b-pg7podjpv.brevlab.com/v1"
     )
     llm = fa.ops.LLM().to(backend)
 
