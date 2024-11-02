@@ -16,8 +16,6 @@ class TranscriptionRequest(BaseModel):
     speaker_1_name: str
     speaker_2_name: str
     model: str
-    # nim_api_key: str
-    # tts_api_key: str
 
 @app.get("/health")
 async def health():
@@ -80,7 +78,6 @@ async def process_pdf(
         "speaker_1_name": transcription_request.speaker_1_name,
         "speaker_2_name": transcription_request.speaker_2_name,
         "model": transcription_request.model,
-        # "nim_api_key": transcription_request.nim_api_key  # Pass NIM API key
     }
     agent_response = requests.post(AGENT_SERVICE_URL, json=agent_payload)
     if agent_response.status_code != 200:
@@ -90,7 +87,6 @@ async def process_pdf(
     # Step 3: Generate TTS with API key
     tts_payload = {
         "dialogue": agent_result["dialogue"],
-        "tts_api_key": os.getenv("ELEVENLABS_API_KEY")
     }
     tts_response = requests.post(TTS_SERVICE_URL, json=tts_payload)
     if tts_response.status_code != 200:

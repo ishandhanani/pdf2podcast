@@ -2,9 +2,6 @@ import requests
 import os
 import json
 
-# NIM_KEY = os.getenv("NIM_KEY")
-# TTS_KEY = os.getenv("ELEVENLABS_API_KEY")
-
 def test_combined_api():
     # API endpoint
     url = "http://localhost:8002/process_pdf"
@@ -22,8 +19,6 @@ def test_combined_api():
         "speaker_1_name": "Blackwell",
         "speaker_2_name": "Hopper",
         "model": "meta/llama-3.1-405b-instruct",
-        # "nim_api_key": NIM_KEY,
-        # "tts_api_key": TTS_KEY,
     }
 
     # Open the PDF file and send it in the request
