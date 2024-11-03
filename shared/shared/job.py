@@ -1,4 +1,4 @@
-from shared.shared_types import ServiceType  # Import from shared_types
+from shared.shared_types import ServiceType, JobStatus  # Import JobStatus as well
 import redis
 import time
 import json
@@ -12,19 +12,21 @@ class JobStatusManager:
 
     def create_job(self, job_id: str):
         update = {
-            "status": "pending",
+            "job_id": job_id,  # Add job_id
+            "status": JobStatus.PENDING.value,  # Use enum value
             "message": "Job created",
-            "service": self.service_type,
+            "service": self.service_type.value,  # Convert enum to string value
             "timestamp": time.time()
         }
         self.redis.hset(f"status:{job_id}:{self.service_type}", mapping=update)
         self.redis.publish("status_updates:all", json.dumps(update))
 
-    def update_status(self, job_id: str, status: str, message: str):
+    def update_status(self, job_id: str, status: JobStatus, message: str):
         update = {
-            "status": status,
+            "job_id": job_id,  # Add job_id
+            "status": status.value,  # Use enum value
             "message": message,
-            "service": self.service_type,
+            "service": self.service_type.value,  # Convert enum to string value
             "timestamp": time.time()
         }
         self.redis.hset(f"status:{job_id}:{self.service_type}", mapping=update)

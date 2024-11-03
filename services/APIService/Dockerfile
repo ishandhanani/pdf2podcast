@@ -9,6 +9,6 @@ COPY shared /shared
 RUN pip install /shared
 
 # Copy service files
-COPY services/APIservice/main.py ./
+COPY services/APIService/main.py ./
 
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8002"]

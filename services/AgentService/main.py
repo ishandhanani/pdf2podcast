@@ -1,6 +1,6 @@
 from fastapi import FastAPI, BackgroundTasks
 from shared.shared_types import ServiceType, JobStatus
-from shared.job_status import JobStatusManager
+from shared.job import JobStatusManager
 import flexagent as fa
 from flexagent.backend import BackendConfig
 from flexagent.engine import Value
@@ -232,7 +232,7 @@ def get_status(job_id: str):
 @app.get("/output/{job_id}")
 def get_output(job_id: str):
     result = job_manager.get_result(job_id)
-    return json.loads(result.decode())
+    return json.loads(result)
 
 @app.get("/transcribe/health")
 def health():

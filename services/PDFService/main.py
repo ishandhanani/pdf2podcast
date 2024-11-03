@@ -1,6 +1,6 @@
 from fastapi import FastAPI, File, UploadFile, BackgroundTasks, HTTPException
 from shared.shared_types import ServiceType, JobStatus
-from shared.job_status import JobStatusManager
+from shared.job import JobStatusManager
 from fastapi.responses import PlainTextResponse
 from docling.document_converter import DocumentConverter
 from pydantic import BaseModel
@@ -105,7 +105,7 @@ async def get_status(job_id: str):
 async def get_output(job_id: str):
     """Get the converted markdown content"""
     result = job_manager.get_result(job_id)
-    return result.decode()
+    return result
 
 @app.get("/health")
 async def health():

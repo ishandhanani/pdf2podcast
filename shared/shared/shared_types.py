@@ -16,7 +16,7 @@ class JobStatus(str, Enum):
 class StatusUpdate(BaseModel):
     job_id: str
     status: JobStatus
-    message: str
-    service: ServiceType
-    timestamp: float
+    message: Optional[str] = None
+    service: Optional[ServiceType] = None
+    timestamp: Optional[float] = None
     data: Optional[dict] = None
