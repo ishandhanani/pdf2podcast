@@ -2,8 +2,28 @@ import requests
 from fastapi import FastAPI, File, UploadFile, HTTPException, Form, Response, BackgroundTasks
 import json
 import os
-from typing import Dict
+from typing import Dict, Optional
 import time
+from enum import Enum
+from pydantic import BaseModel
+
+class JobStatus(Enum):
+    PENDING = "pending"
+    PROCESSING = "processing"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+class JobStatusResponse(BaseModel):
+    status: str
+    message: str
+    timestamp: float
+
+class Job:
+    def __init__(self):
+        self.status = JobStatus.PENDING
+        self.message = "Job started"
+        self.timestamp = time.time()
+        self.result: Optional[bytes] = None
 
 app = FastAPI(debug=True)
 
@@ -12,18 +32,24 @@ AGENT_SERVICE_URL = os.getenv("AGENT_SERVICE_URL", "http://localhost:8964/transc
 TTS_SERVICE_URL = os.getenv("TTS_SERVICE_URL", "http://localhost:8888/generate_tts")
 
 # In-memory job storage
-jobs: Dict[str, dict] = {}
+jobs: Dict[str, Job] = {}
 
-def update_job_status(job_id: str, status: str, message: str):
-    jobs[job_id].update({
-        "status": status,
-        "message": message,
-        "timestamp": time.time()
-    })
+def update_job_status(job_id: str, status: JobStatus, message: str):
+    if job_id not in jobs:
+        raise KeyError(f"Job {job_id} not found")
+    
+    job = jobs[job_id]
+    job.status = status
+    job.message = message
+    job.timestamp = time.time()
 
-async def process_pdf_task(job_id: str, file_content: bytes, transcription_params: dict):
+def process_pdf_task(job_id: str, file_content: bytes, transcription_params: dict):
     try:
-        update_job_status(job_id, "processing", "Converting PDF to markdown...")
+        update_job_status(
+            job_id, 
+            JobStatus.PROCESSING, 
+            "Converting PDF to markdown..."
+        )
         
         pdf_response = requests.post(
             PDF_SERVICE_URL, 
@@ -33,7 +59,11 @@ async def process_pdf_task(job_id: str, file_content: bytes, transcription_param
             raise Exception("PDF conversion failed")
         markdown_content = pdf_response.text
 
-        update_job_status(job_id, "processing", "Processing with agent service...")
+        update_job_status(
+            job_id, 
+            JobStatus.PROCESSING, 
+            "Processing with agent service..."
+        )
         
         agent_payload = {
             "markdown": markdown_content,
@@ -44,7 +74,11 @@ async def process_pdf_task(job_id: str, file_content: bytes, transcription_param
             raise Exception("Agent processing failed")
         agent_result = agent_response.json()
 
-        update_job_status(job_id, "processing", "Generating text-to-speech...")
+        update_job_status(
+            job_id, 
+            JobStatus.PROCESSING, 
+            "Generating text-to-speech..."
+        )
         
         tts_payload = {
             "dialogue": agent_result["dialogue"]
@@ -54,13 +88,21 @@ async def process_pdf_task(job_id: str, file_content: bytes, transcription_param
             raise Exception("TTS generation failed")
 
         # Store result and update status
-        jobs[job_id]["result"] = tts_response.content
-        update_job_status(job_id, "completed", "Processing completed")
+        jobs[job_id].result = tts_response.content
+        update_job_status(
+            job_id, 
+            JobStatus.COMPLETED, 
+            "Processing completed"
+        )
 
     except Exception as e:
-        update_job_status(job_id, "failed", str(e))
+        update_job_status(
+            job_id, 
+            JobStatus.FAILED, 
+            str(e)
+        )
 
-@app.post("/process_pdf")
+@app.post("/process_pdf", status_code=202)
 async def process_pdf(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
@@ -74,47 +116,69 @@ async def process_pdf(
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="Invalid JSON in transcription_params")
 
-    # timestamp jobID
+    # Create job ID using timestamp
     job_id = str(int(time.time()))
     file_content = await file.read()
     
-    jobs[job_id] = {
-        "status": "pending",
-        "message": "Job started",
-        "timestamp": time.time(),
-        "result": None
-    }
+    # Initialize job
+    jobs[job_id] = Job()
 
     # Start background process
     background_tasks.add_task(process_pdf_task, job_id, file_content, params)
 
-    return {"job_id": job_id, "status": "pending"}
+    return {"job_id": job_id}
 
-@app.get("/status/{job_id}")
+@app.get("/status/{job_id}", response_model=JobStatusResponse)
 async def get_status(job_id: str):
     if job_id not in jobs:
         raise HTTPException(status_code=404, detail="Job not found")
     
     job = jobs[job_id]
-    
-    if job["status"] == "completed" and job["result"]:
-        return Response(content=job["result"], media_type="audio/mpeg")
-    
-    return {
-        "status": job["status"],
-        "message": job["message"]
-    }
+    return JobStatusResponse(
+        status=job.status.value,
+        message=job.message,
+        timestamp=job.timestamp
+    )
 
-# # Simple cleanup - remove jobs older than 1 hour
-# @app.get("/cleanup")
-# async def cleanup_jobs():
-#     current_time = time.time()
-#     removed = 0
-#     for job_id in list(jobs.keys()):
-#         if current_time - jobs[job_id]["timestamp"] > 3600:
-#             del jobs[job_id]
-#             removed += 1
-#     return {"message": f"Removed {removed} old jobs"}
+@app.get("/output/{job_id}")
+async def get_output(job_id: str):
+    if job_id not in jobs:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    job = jobs[job_id]
+    
+    if job.status != JobStatus.COMPLETED:
+        raise HTTPException(
+            status_code=425,  # Too Early
+            detail="Job is not completed yet"
+        )
+    
+    if not job.result:
+        raise HTTPException(
+            status_code=500,
+            detail="Job completed but no result found"
+        )
+    
+    return Response(content=job.result, media_type="audio/mpeg")
+
+@app.delete("/jobs/{job_id}")
+async def delete_job(job_id: str):
+    if job_id not in jobs:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    del jobs[job_id]
+    return {"message": f"Job {job_id} deleted"}
+
+# Optional cleanup endpoint
+@app.post("/cleanup")
+async def cleanup_jobs():
+    current_time = time.time()
+    removed = 0
+    for job_id in list(jobs.keys()):
+        if current_time - jobs[job_id].timestamp > 3600:  # 1 hour
+            del jobs[job_id]
+            removed += 1
+    return {"message": f"Removed {removed} old jobs"}
 
 if __name__ == "__main__":
     import uvicorn
