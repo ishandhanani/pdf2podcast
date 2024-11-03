@@ -1,106 +1,81 @@
+from fastapi import FastAPI, File, UploadFile, Form, BackgroundTasks, Response
+from job_status import JobStatusManager, JobStatus
 import requests
-from fastapi import FastAPI, File, UploadFile, HTTPException, Form, Response, BackgroundTasks
 import json
 import os
-from typing import Dict, Optional
-import time
-from enum import Enum
-from pydantic import BaseModel
+import logging
 
-class JobStatus(Enum):
-    PENDING = "pending"
-    PROCESSING = "processing"
-    COMPLETED = "completed"
-    FAILED = "failed"
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-class JobStatusResponse(BaseModel):
-    status: str
-    message: str
-    timestamp: float
+app = FastAPI()
+job_manager = JobStatusManager()
 
-class Job:
-    def __init__(self):
-        self.status = JobStatus.PENDING
-        self.message = "Job started"
-        self.timestamp = time.time()
-        self.result: Optional[bytes] = None
-
-app = FastAPI(debug=True)
-
-PDF_SERVICE_URL = os.getenv("PDF_SERVICE_URL", "http://localhost:8003/convert")
-AGENT_SERVICE_URL = os.getenv("AGENT_SERVICE_URL", "http://localhost:8964/transcribe")
-TTS_SERVICE_URL = os.getenv("TTS_SERVICE_URL", "http://localhost:8888/generate_tts")
-
-# In-memory job storage
-jobs: Dict[str, Job] = {}
-
-def update_job_status(job_id: str, status: JobStatus, message: str):
-    if job_id not in jobs:
-        raise KeyError(f"Job {job_id} not found")
-    
-    job = jobs[job_id]
-    job.status = status
-    job.message = message
-    job.timestamp = time.time()
+# Service URLs
+PDF_SERVICE_URL = os.getenv("PDF_SERVICE_URL", "http://localhost:8003")
+AGENT_SERVICE_URL = os.getenv("AGENT_SERVICE_URL", "http://localhost:8964")
+TTS_SERVICE_URL = os.getenv("TTS_SERVICE_URL", "http://localhost:8888")
 
 def process_pdf_task(job_id: str, file_content: bytes, transcription_params: dict):
     try:
-        update_job_status(
-            job_id, 
-            JobStatus.PROCESSING, 
-            "Converting PDF to markdown..."
-        )
-        
+        # Step 1: PDF Service
+        job_manager.update_status(job_id, JobStatus.PROCESSING, "Starting PDF conversion...")
         pdf_response = requests.post(
-            PDF_SERVICE_URL, 
-            files={"file": ("file.pdf", file_content, "application/pdf")}
-        )
-        if pdf_response.status_code != 200:
-            raise Exception("PDF conversion failed")
-        markdown_content = pdf_response.text
-
-        update_job_status(
-            job_id, 
-            JobStatus.PROCESSING, 
-            "Processing with agent service..."
+            f"{PDF_SERVICE_URL}/convert",
+            files={"file": ("file.pdf", file_content, "application/pdf")},
+            data={"job_id": job_id}
         )
         
+        while True:
+            status = requests.get(f"{PDF_SERVICE_URL}/status/{job_id}").json()
+            job_manager.update_status(job_id, JobStatus.PROCESSING, f"PDF Service: {status['message']}")
+            if status["status"] == "completed":
+                markdown_content = requests.get(f"{PDF_SERVICE_URL}/output/{job_id}").text
+                break
+            elif status["status"] == "failed":
+                raise Exception(f"PDF conversion failed: {status['message']}")
+            time.sleep(1)
+
+        # Step 2: Agent Service
         agent_payload = {
             "markdown": markdown_content,
+            "job_id": job_id,
             **transcription_params
         }
-        agent_response = requests.post(AGENT_SERVICE_URL, json=agent_payload)
-        if agent_response.status_code != 200:
-            raise Exception("Agent processing failed")
-        agent_result = agent_response.json()
-
-        update_job_status(
-            job_id, 
-            JobStatus.PROCESSING, 
-            "Generating text-to-speech..."
-        )
+        requests.post(f"{AGENT_SERVICE_URL}/transcribe", json=agent_payload)
         
-        tts_payload = {
-            "dialogue": agent_result["dialogue"]
-        }
-        tts_response = requests.post(TTS_SERVICE_URL, json=tts_payload)
-        if tts_response.status_code != 200:
-            raise Exception("TTS generation failed")
+        while True:
+            status = requests.get(f"{AGENT_SERVICE_URL}/status/{job_id}").json()
+            job_manager.update_status(job_id, JobStatus.PROCESSING, f"Agent Service: {status['message']}")
+            if status["status"] == "completed":
+                agent_result = requests.get(f"{AGENT_SERVICE_URL}/output/{job_id}").json()
+                break
+            elif status["status"] == "failed":
+                raise Exception(f"Agent processing failed: {status['message']}")
+            time.sleep(1)
 
-        # Store result and update status
-        jobs[job_id].result = tts_response.content
-        update_job_status(
-            job_id, 
-            JobStatus.COMPLETED, 
-            "Processing completed"
-        )
+        # Step 3: TTS Service
+        tts_payload = {
+            "dialogue": agent_result["dialogue"],
+            "job_id": job_id
+        }
+        requests.post(f"{TTS_SERVICE_URL}/generate_tts", json=tts_payload)
+        
+        while True:
+            status = requests.get(f"{TTS_SERVICE_URL}/status/{job_id}").json()
+            job_manager.update_status(job_id, JobStatus.PROCESSING, f"TTS Service: {status['message']}")
+            if status["status"] == "completed":
+                result = requests.get(f"{TTS_SERVICE_URL}/output/{job_id}").content
+                job_manager.set_result(job_id, result)
+                job_manager.update_status(job_id, JobStatus.COMPLETED, "Processing completed successfully")
+                break
+            elif status["status"] == "failed":
+                raise Exception(f"TTS generation failed: {status['message']}")
+            time.sleep(1)
 
     except Exception as e:
-        update_job_status(
-            job_id, 
-            JobStatus.FAILED, 
-            str(e)
-        )
+        logger.error(f"Job {job_id} failed: {str(e)}")
+        job_manager.update_status(job_id, JobStatus.FAILED, str(e))
 
 @app.post("/process_pdf", status_code=202)
 async def process_pdf(
@@ -116,70 +91,26 @@ async def process_pdf(
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="Invalid JSON in transcription_params")
 
-    # Create job ID using timestamp
+    # Create job
     job_id = str(int(time.time()))
-    file_content = await file.read()
+    job_manager.create_job(job_id)
     
-    # Initialize job
-    jobs[job_id] = Job()
-
-    # Start background process
+    # Start processing
+    file_content = await file.read()
     background_tasks.add_task(process_pdf_task, job_id, file_content, params)
 
     return {"job_id": job_id}
 
-@app.get("/status/{job_id}", response_model=JobStatusResponse)
+@app.get("/status/{job_id}")
 async def get_status(job_id: str):
-    if job_id not in jobs:
-        raise HTTPException(status_code=404, detail="Job not found")
-    
-    job = jobs[job_id]
-    return JobStatusResponse(
-        status=job.status.value,
-        message=job.message,
-        timestamp=job.timestamp
-    )
+    return job_manager.get_status(job_id)
 
 @app.get("/output/{job_id}")
 async def get_output(job_id: str):
-    if job_id not in jobs:
-        raise HTTPException(status_code=404, detail="Job not found")
-    
-    job = jobs[job_id]
-    
-    if job.status != JobStatus.COMPLETED:
-        raise HTTPException(
-            status_code=425,  # Too Early
-            detail="Job is not completed yet"
-        )
-    
-    if not job.result:
-        raise HTTPException(
-            status_code=500,
-            detail="Job completed but no result found"
-        )
-    
-    return Response(content=job.result, media_type="audio/mpeg")
+    result = job_manager.get_result(job_id)
+    return Response(content=result, media_type="audio/mpeg")
 
-@app.delete("/jobs/{job_id}")
-async def delete_job(job_id: str):
-    if job_id not in jobs:
-        raise HTTPException(status_code=404, detail="Job not found")
-    
-    del jobs[job_id]
-    return {"message": f"Job {job_id} deleted"}
-
-# Optional cleanup endpoint
 @app.post("/cleanup")
 async def cleanup_jobs():
-    current_time = time.time()
-    removed = 0
-    for job_id in list(jobs.keys()):
-        if current_time - jobs[job_id].timestamp > 3600:  # 1 hour
-            del jobs[job_id]
-            removed += 1
+    removed = job_manager.cleanup_old_jobs()
     return {"message": f"Removed {removed} old jobs"}
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8002)

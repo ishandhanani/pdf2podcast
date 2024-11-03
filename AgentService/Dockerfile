@@ -4,8 +4,8 @@ FROM python:3.9-slim
 # Set the working directory in the container
 WORKDIR /app
 
-# Copy the current directory contents into the container at /app
-COPY . /app
+# Copy service files
+COPY main.py prompts.py job_status.py /app/
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
@@ -21,9 +21,6 @@ WORKDIR /app/flexagent/python
 RUN pip install --use-pep517 -e .
 WORKDIR /app
 
-# Make port 8964 available to the world outside this container
 EXPOSE 8964
 
-# Run the API when the container launches
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8964"]
-

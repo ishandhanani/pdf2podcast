@@ -1,7 +1,10 @@
 FROM python:3.9-slim
 
 WORKDIR /app
-COPY ./combined_api.py /app/
-RUN pip install fastapi uvicorn python-multipart requests
+
+# Copy service files
+COPY combined_api.py job_status.py ./
+
+RUN pip install fastapi uvicorn python-multipart requests pydantic
 
 CMD ["uvicorn", "combined_api:app", "--host", "0.0.0.0", "--port", "8002"]

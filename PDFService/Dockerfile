@@ -1,33 +1,27 @@
-# Use NVIDIA PyTorch image as the base
 FROM pytorch/pytorch:2.4.0-cuda12.4-cudnn9-devel
 
-# Install OpenGL libraries
 RUN apt-get update \
     && apt-get install -y libgl1 libglib2.0-0 curl wget git procps \
     && apt-get clean
 
-# Set the working directory in the container
 WORKDIR /app
 
-# Copy the requirements file into the container
-COPY requirements.txt .
-
-# Install the Python dependencies
+# Copy only requirements first to leverage caching
+COPY requirements.txt /app/
 RUN pip install -r requirements.txt
 
-# Download models
-RUN python -c 'from deepsearch_glm.utils.load_pretrained_models import load_pretrained_nlp_models; load_pretrained_nlp_models(verbose=True);'
+# Create the download script inline instead of copying
+RUN echo 'from deepsearch_glm.utils.load_pretrained_models import load_pretrained_nlp_models\nload_pretrained_nlp_models(verbose=True)' > download_models.py
 
-ADD sample.pdf /app/
-ADD dry_run.py /app/
+# Download models
+RUN python download_models.py
+
+# Copy remaining application files after model download
+COPY main.py job_status.py /app/
+COPY sample.pdf /app/
+COPY dry_run.py /app/
 RUN python3 /app/dry_run.py
 
-# Copy the Python script into the container
-COPY main.py .
-
-# Expose the port the app runs on
 EXPOSE 8003
 
-# Command to run the application
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8003"]
-
