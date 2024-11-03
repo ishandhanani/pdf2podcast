@@ -132,6 +132,12 @@ def get_output_with_retry(base_url: str, job_id: str, max_retries=5, retry_delay
     raise TimeoutError("Failed to get output after maximum retries")
 
 def test_api(base_url: str):
+    # Define default voice mapping
+    voice_mapping = {
+        "speaker-1": "iP95p4xoKVk53GoZ742B",  # Example voice ID for speaker 1
+        "speaker-2": "9BWtsMINqrJLrRacOk9x"      # Example voice ID for speaker 2
+    }
+    
     # API endpoint
     process_url = f"{base_url}/process_pdf"
 
@@ -148,10 +154,13 @@ def test_api(base_url: str):
         "speaker_1_name": "Blackwell",
         "speaker_2_name": "Hopper",
         "model": "meta/llama-3.1-405b-instruct",
+        "voice_mapping": voice_mapping  # Add voice mapping
     }
 
     # Step 1: Submit the PDF file and get job ID
     print(f"\n[{datetime.now().strftime('%H:%M:%S')}] Submitting PDF for processing...")
+    print(f"Using voices: {voice_mapping}")
+    
     with open(sample_pdf_path, "rb") as pdf_file:
         files = {"file": ("sample.pdf", pdf_file, "application/pdf")}
         response = requests.post(
@@ -160,7 +169,6 @@ def test_api(base_url: str):
             data={"transcription_params": json.dumps(transcription_params)}
         )
 
-    # Check initial response
     assert response.status_code == 202, f"Expected status code 202, but got {response.status_code}"
     job_data = response.json()
     assert "job_id" in job_data, "Response missing job_id"
