@@ -85,11 +85,12 @@ def process_transcription(job_id: str, request: TranscriptionRequest):
         raw_outline = retry_nim_request(llm, messages)
 
         # Process outline
-        job_manager.update_status(job_id, JobStatus.PROCESSING, "Processing outline")
+        job_manager.update_status(job_id, JobStatus.PROCESSING, "Converting raw outline to structured format")
         prompt = OUTLINE_PROMPT.render(text=raw_outline, schema=json.dumps(schema, indent=2))
         messages = [{"role": "user", "content": prompt}]
         outline = retry_nim_request(llm, messages)
         outline_json = json.loads(fa.utils.json_func.extract_json(outline))
+        job_manager.update_status(job_id, JobStatus.PROCESSING, f"Generated outline: {json.dumps(outline_json, indent=2)}")
 
         # Process segments
         longest_segment_idx = max(range(len(outline_json["segments"])), 

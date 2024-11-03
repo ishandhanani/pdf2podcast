@@ -1,5 +1,6 @@
 from fastapi import HTTPException, FastAPI, File, UploadFile, Form, BackgroundTasks, Response, WebSocket, WebSocketDisconnect
 from shared.shared_types import ServiceType, JobStatus, StatusUpdate
+from fastapi.middleware.cors import CORSMiddleware
 import redis
 import requests
 import json
@@ -22,6 +23,18 @@ redis_client = redis.Redis.from_url(os.getenv("REDIS_URL", "redis://redis:6379")
 PDF_SERVICE_URL = os.getenv("PDF_SERVICE_URL", "http://localhost:8003")
 AGENT_SERVICE_URL = os.getenv("AGENT_SERVICE_URL", "http://localhost:8964")
 TTS_SERVICE_URL = os.getenv("TTS_SERVICE_URL", "http://localhost:8888")
+
+# CORS setup
+CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:3000")
+allowed_origins = [origin.strip() for origin in CORS_ORIGINS.split(",")]
+logger.info(f"Configuring CORS with allowed origins: {allowed_origins}")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allowed_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 class ConnectionManager:
     def __init__(self):
