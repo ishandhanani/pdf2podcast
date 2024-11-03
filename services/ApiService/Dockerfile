@@ -7,7 +7,7 @@ COPY shared /shared
 RUN pip install /shared
 
 # Copy service files
-COPY services/APIService/main.py ./
+COPY services/ApiService/main.py ./
 
 RUN pip install fastapi uvicorn python-multipart requests pydantic redis
 
