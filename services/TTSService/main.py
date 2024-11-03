@@ -1,4 +1,4 @@
-from fastapi import FastAPI, BackgroundTasks
+from fastapi import FastAPI, BackgroundTasks, HTTPException
 from shared.shared_types import ServiceType, JobStatus
 from shared.job import JobStatusManager
 from fastapi.responses import Response
@@ -111,8 +111,10 @@ async def get_status(job_id: str):
 async def get_output(job_id: str):
     """Get the generated audio file"""
     result = job_manager.get_result(job_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Result not found")
     return Response(
-        content=result,
+        content=result,  # Leave binary data as-is
         media_type="audio/mpeg",
         headers={"Content-Disposition": "attachment; filename=output.mp3"}
     )

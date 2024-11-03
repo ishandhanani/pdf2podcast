@@ -1,4 +1,4 @@
-FROM pytorch/pytorch:2.4.0-cuda12.4-cudnn9-devel
+FROM python:3.11-slim
 
 USER root
 ARG DEBIAN_FRONTEND=noninteractive

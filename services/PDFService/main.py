@@ -105,7 +105,9 @@ async def get_status(job_id: str):
 async def get_output(job_id: str):
     """Get the converted markdown content"""
     result = job_manager.get_result(job_id)
-    return result
+    if result is None:
+        raise HTTPException(status_code=404, detail="Result not found")
+    return result.decode()  # Decode bytes to string for markdown content
 
 @app.get("/health")
 async def health():

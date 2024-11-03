@@ -2,10 +2,69 @@ import requests
 import os
 import json
 import time
+import redis
 from datetime import datetime
+from threading import Thread, Event
 
 def get_time():
     return datetime.now().strftime('%H:%M:%S')
+
+class StatusListener:
+    def __init__(self, job_id):
+        self.job_id = job_id
+        self.redis_client = redis.Redis(host='localhost', port=6379, decode_responses=True)
+        self.pubsub = self.redis_client.pubsub()
+        self.stop_event = Event()
+        self.services = {'pdf', 'agent', 'tts'}
+        self.last_statuses = {service: None for service in self.services}
+        self.tts_completed = Event()
+        
+    def start(self):
+        self.pubsub.subscribe('status_updates:all')
+        self.thread = Thread(target=self._listen)
+        self.thread.start()
+        
+    def stop(self):
+        self.stop_event.set()
+        self.pubsub.unsubscribe()
+        self.thread.join()
+        self.redis_client.close()
+        
+    def _listen(self):
+        start_time = time.time()
+        
+        for message in self.pubsub.listen():
+            if self.stop_event.is_set():
+                break
+                
+            if message['type'] == 'message':
+                try:
+                    data = json.loads(message['data'])
+                    # Only process messages for our job
+                    if data.get('job_id') == self.job_id:
+                        service = data.get('service')
+                        status = data.get('status')
+                        msg = data.get('message', '')
+                        
+                        if service in self.services:
+                            current_status = f"{service}: {status} - {msg}"
+                            if current_status != self.last_statuses[service]:
+                                elapsed = time.time() - start_time
+                                print(f"[{get_time()}] ({elapsed:.1f}s) {current_status}")
+                                self.last_statuses[service] = current_status
+                                
+                                if status == 'failed':
+                                    print(f"[{get_time()}] Job failed in {service}: {msg}")
+                                    self.stop_event.set()
+                                    
+                                if service == 'tts' and status == 'completed':
+                                    self.tts_completed.set()
+                                
+                except json.JSONDecodeError:
+                    continue
+                except Exception as e:
+                    print(f"Error processing message: {e}")
+                    continue
 
 def test_api():
     # API endpoint
@@ -24,7 +83,7 @@ def test_api():
         "duration": 5,
         "speaker_1_name": "Blackwell",
         "speaker_2_name": "Hopper",
-        "model": "meta/llama-3.1-405b-instruct",
+        "model": "nvidia/llama-3.1-nemotron-51b-instruct",
     }
 
     # Step 1: Submit the PDF file and get job ID
@@ -44,51 +103,30 @@ def test_api():
     job_id = job_data["job_id"]
     print(f"[{get_time()}] Job ID received: {job_id}")
 
-    # Step 2: Poll for status and results
-    max_minutes = 20  # Maximum wait time in minutes
-    poll_interval = 5  # Poll every 30 seconds
-    max_attempts = (max_minutes * 60) // poll_interval
-    attempts = 0
+    # Step 2: Start listening for status updates
+    listener = StatusListener(job_id)
+    listener.start()
     
-    start_time = time.time()
-    last_status = None
-    
-    print(f"[{get_time()}] Polling for results (will wait up to {max_minutes} minutes)...")
-    while attempts < max_attempts:
-        # Get status
-        status_response = requests.get(f"{base_url}/status/{job_id}")
-        assert status_response.status_code == 200, f"Status check failed with code {status_response.status_code}"
+    try:
+        # Wait for TTS completion or timeout
+        max_wait = 20 * 60  # 20 minutes in seconds
+        if not listener.tts_completed.wait(timeout=max_wait):
+            raise TimeoutError(f"Test timed out after {max_wait} seconds")
+            
+        # If we get here, TTS completed successfully
+        print(f"\n[{get_time()}] TTS processing completed, retrieving audio file...")
         
-        status_data = status_response.json()
-        current_status = f"{status_data['status']} - {status_data['message']}"
+        # Get the final output
+        output_response = requests.get(f"{base_url}/output/{job_id}")
+        assert output_response.status_code == 200, f"Failed to get output, status code: {output_response.status_code}"
         
-        if current_status != last_status:
-            elapsed_time = time.time() - start_time
-            print(f"[{get_time()}] ({elapsed_time:.1f}s) Status: {current_status}")
-            last_status = current_status
-
-        if status_data["status"] == "failed":
-            raise AssertionError(f"Job failed: {status_data['message']}")
+        # Save the audio file
+        with open("output.mp3", "wb") as f:
+            f.write(output_response.content)
+        print(f"[{get_time()}] Audio file saved as 'output.mp3'")
         
-        if status_data["status"] == "completed":
-            # Try to get the output
-            output_response = requests.get(f"{base_url}/output/{job_id}")
-            if output_response.status_code == 200:
-                elapsed_time = time.time() - start_time
-                print(f"\n[{get_time()}] Audio file received after {elapsed_time:.1f} seconds")
-                # Save the audio file
-                with open("output.mp3", "wb") as f:
-                    f.write(output_response.content)
-                print(f"[{get_time()}] Audio file saved as 'output.mp3'")
-                break
-
-        attempts += 1
-        time.sleep(poll_interval)
-    else:
-        elapsed_time = time.time() - start_time
-        raise TimeoutError(f"Test timed out after {elapsed_time:.1f} seconds ({max_minutes} minutes)")
-
-    print(f"\n[{get_time()}] API test passed successfully.")
+    finally:
+        listener.stop()
 
 if __name__ == "__main__":
     test_api()

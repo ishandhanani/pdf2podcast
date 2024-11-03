@@ -1,4 +1,4 @@
-from fastapi import FastAPI, BackgroundTasks
+from fastapi import FastAPI, BackgroundTasks, HTTPException
 from shared.shared_types import ServiceType, JobStatus
 from shared.job import JobStatusManager
 import flexagent as fa
@@ -232,7 +232,9 @@ def get_status(job_id: str):
 @app.get("/output/{job_id}")
 def get_output(job_id: str):
     result = job_manager.get_result(job_id)
-    return json.loads(result)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Result not found")
+    return json.loads(result.decode())  # Decode bytes to string before JSON parsing
 
 @app.get("/transcribe/health")
 def health():

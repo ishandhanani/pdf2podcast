@@ -1,4 +1,4 @@
-FROM pytorch/pytorch:2.4.0-cuda12.4-cudnn9-devel
+FROM python:3.11-slim
 
 RUN apt-get update \
     && apt-get install -y libgl1 libglib2.0-0 curl wget git procps \
