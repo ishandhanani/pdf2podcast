@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
   redis:
     image: redis:latest
@@ -12,9 +10,7 @@ services:
       - app-network
 
   api-service:
-    build:
-      context: .
-      dockerfile: services/APIService/Dockerfile
+    image: nvcr.io/pfteb4cqjzrs/playground/api-service:0.6
     ports:
       - "8002:8002"
     environment:
@@ -31,24 +27,22 @@ services:
       - app-network
 
   agent-service:
-    build:
-      context: .
-      dockerfile: services/AgentService/Dockerfile
+    image: nvcr.io/pfteb4cqjzrs/playground/agent-service:0.5
     ports:
       - "8964:8964"
     environment:
-      - API_BASE=${API_BASE:-http://0.0.0.0:8000/v1}
+      - API_BASE=http://host.docker.internal:8000/v1
       - NIM_KEY=${NIM_KEY}
       - REDIS_URL=redis://redis:6379
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       - redis
     networks:
       - app-network
 
   pdf-service:
-    build:
-      context: .
-      dockerfile: services/PDFService/Dockerfile
+    image: nvcr.io/pfteb4cqjzrs/playground/pdf-service:0.5.cpu
     ports:
       - "8003:8003"
     environment:
@@ -59,9 +53,7 @@ services:
       - app-network
 
   tts-service:
-    build:
-      context: .
-      dockerfile: services/TTSService/Dockerfile
+    image: nvcr.io/pfteb4cqjzrs/playground/tts-service:0.6.cpu
     ports:
       - "8888:8888"
     environment:
