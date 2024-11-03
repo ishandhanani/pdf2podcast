@@ -1,17 +1,29 @@
 version: "3.8"
 
 services:
+  redis:
+    image: redis:latest
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    networks:
+      - app-network
+
   api-service:
     build:
       context: .
-      dockerfile: Dockerfile.api
+      dockerfile: services/ApiService/Dockerfile
     ports:
       - "8002:8002"
     environment:
       - PDF_SERVICE_URL=http://pdf-service:8003
       - AGENT_SERVICE_URL=http://agent-service:8964
       - TTS_SERVICE_URL=http://tts-service:8888
+      - REDIS_URL=redis://redis:6379
     depends_on:
+      - redis
       - pdf-service
       - agent-service
       - tts-service
@@ -20,34 +32,47 @@ services:
 
   agent-service:
     build:
-      context: ./AgentService
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/AgentService/Dockerfile
     ports:
       - "8964:8964"
     environment:
       - NIM_KEY=${NIM_KEY}
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - redis
     networks:
       - app-network
 
   pdf-service:
     build:
-      context: ./PDFService
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/PDFService/Dockerfile
     ports:
       - "8003:8003"
+    environment:
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - redis
     networks:
       - app-network
 
   tts-service:
     build:
-      context: ./TTSService
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/TTSService/Dockerfile
     ports:
       - "8888:8888"
     environment:
       - ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY}
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - redis
     networks:
       - app-network
+
+volumes:
+  redis_data:
 
 networks:
   app-network:
