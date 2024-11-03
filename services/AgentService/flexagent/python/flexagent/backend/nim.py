@@ -49,9 +49,10 @@ class NIMBackend(OpenAIBackend):
         self,
         model_name: str,
         api_key: Optional[str] = None,
-        api_base: str = "https://405b-pg7podjpv.brevlab.com/v1",
+        api_base: str = None,
     ):
         api_key = api_key or os.getenv("NIM_KEY")
+        api_base = api_base or os.getenv("API_BASE")
         self.max_retry = 5
         if not api_key:
             raise ValueError(

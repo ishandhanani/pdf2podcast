@@ -74,7 +74,7 @@ def process_transcription(job_id: str, request: TranscriptionRequest):
             backend_type="nim",
             model_name=request.model,
             api_key=os.getenv("NIM_KEY"),
-            api_base="https://405b-pg7podjpv.brevlab.com/v1"
+            api_base=os.getenv("API_BASE")
         )
         llm = fa.ops.LLM().to(backend)
 

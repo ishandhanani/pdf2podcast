@@ -37,6 +37,7 @@ services:
     ports:
       - "8964:8964"
     environment:
+      - API_BASE=${API_BASE}
       - NIM_KEY=${NIM_KEY}
       - REDIS_URL=redis://redis:6379
     depends_on:
