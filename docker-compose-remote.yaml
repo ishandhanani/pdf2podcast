@@ -1,0 +1,72 @@
+services:
+  redis:
+    image: redis:latest
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly no
+    networks:
+      - app-network
+
+  api-service:
+    image: nvcr.io/pfteb4cqjzrs/playground/api-service:0.6
+    ports:
+      - "8002:8002"
+    environment:
+      - PDF_SERVICE_URL=http://pdf-service:8003
+      - AGENT_SERVICE_URL=http://agent-service:8964
+      - TTS_SERVICE_URL=http://tts-service:8888
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - redis
+      - pdf-service
+      - agent-service
+      - tts-service
+    networks:
+      - app-network
+
+  agent-service:
+    image: nvcr.io/pfteb4cqjzrs/playground/agent-service:0.5
+    ports:
+      - "8964:8964"
+    environment:
+      - API_BASE=http://host.docker.internal:8000/v1
+      - NIM_KEY=${NIM_KEY}
+      - REDIS_URL=redis://redis:6379
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - redis
+    networks:
+      - app-network
+
+  pdf-service:
+    image: nvcr.io/pfteb4cqjzrs/playground/pdf-service:0.5.cpu
+    ports:
+      - "8003:8003"
+    environment:
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - redis
+    networks:
+      - app-network
+
+  tts-service:
+    image: nvcr.io/pfteb4cqjzrs/playground/tts-service:0.6.cpu
+    ports:
+      - "8888:8888"
+    environment:
+      - ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY}
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - redis
+    networks:
+      - app-network
+
+volumes:
+  redis_data:
+
+networks:
+  app-network:
+    driver: bridge
