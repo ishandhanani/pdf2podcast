@@ -12,7 +12,7 @@ def get_time():
 class StatusListener:
     def __init__(self, job_id):
         self.job_id = job_id
-        self.redis_client = redis.Redis(host='localhost', port=6379, decode_responses=True)
+        self.redis_client = redis.Redis(host='localhost', port=6379, decode_responses=False)
         self.pubsub = self.redis_client.pubsub()
         self.stop_event = Event()
         self.services = {'pdf', 'agent', 'tts'}
@@ -39,7 +39,7 @@ class StatusListener:
                 
             if message['type'] == 'message':
                 try:
-                    data = json.loads(message['data'])
+                    data = json.loads(message['data'].decode())
                     # Only process messages for our job
                     if data.get('job_id') == self.job_id:
                         service = data.get('service')
@@ -65,6 +65,28 @@ class StatusListener:
                 except Exception as e:
                     print(f"Error processing message: {e}")
                     continue
+
+def get_output_with_retry(base_url: str, job_id: str, max_retries=5, retry_delay=1):
+    """Retry getting output with exponential backoff"""
+    for attempt in range(max_retries):
+        try:
+            response = requests.get(f"{base_url}/output/{job_id}")
+            if response.status_code == 200:
+                return response.content
+            elif response.status_code == 404:
+                wait_time = retry_delay * (2 ** attempt)  # Exponential backoff
+                print(f"[{get_time()}] Output not ready yet, retrying in {wait_time:.1f}s...")
+                time.sleep(wait_time)
+                continue
+            else:
+                response.raise_for_status()
+        except requests.RequestException as e:
+            print(f"[{get_time()}] Error getting output: {e}")
+            if attempt == max_retries - 1:
+                raise
+            time.sleep(retry_delay * (2 ** attempt))
+    
+    raise TimeoutError("Failed to get output after maximum retries")
 
 def test_api():
     # API endpoint
@@ -116,13 +138,12 @@ def test_api():
         # If we get here, TTS completed successfully
         print(f"\n[{get_time()}] TTS processing completed, retrieving audio file...")
         
-        # Get the final output
-        output_response = requests.get(f"{base_url}/output/{job_id}")
-        assert output_response.status_code == 200, f"Failed to get output, status code: {output_response.status_code}"
+        # Get the final output with retry logic
+        audio_content = get_output_with_retry(base_url, job_id)
         
         # Save the audio file
         with open("output.mp3", "wb") as f:
-            f.write(output_response.content)
+            f.write(audio_content)
         print(f"[{get_time()}] Audio file saved as 'output.mp3'")
         
     finally:
