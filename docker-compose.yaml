@@ -14,7 +14,7 @@ services:
   api-service:
     build:
       context: .
-      dockerfile: services/ApiService/Dockerfile
+      dockerfile: services/APIService/Dockerfile
     ports:
       - "8002:8002"
     environment:

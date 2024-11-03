@@ -33,7 +33,7 @@ class JobStatusManager:
     def set_result(self, job_id: str, result: bytes):
         self.redis.set(f"result:{job_id}:{self.service_type}", result)
 
-    def get_result(self, job_id: str) -> Optional[bytes]:
+    def get_result(self, job_id: str):
         result = self.redis.get(f"result:{job_id}:{self.service_type}")
         return result if result else None
 

@@ -1,6 +1,6 @@
-from fastapi import FastAPI, BackgroundTasks, HTTPException
-from shared.shared_types import ServiceType  # Import from shared_types
-from shared.job_status import JobStatusManager, JobStatus
+from fastapi import FastAPI, BackgroundTasks
+from shared.shared_types import ServiceType, JobStatus
+from shared.job_status import JobStatusManager
 import flexagent as fa
 from flexagent.backend import BackendConfig
 from flexagent.engine import Value

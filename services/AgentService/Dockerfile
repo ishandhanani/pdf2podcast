@@ -2,14 +2,6 @@ FROM python:3.9-slim
 
 WORKDIR /app
 
-# Copy shared package first
-COPY shared /shared
-RUN pip install /shared
-
-# Copy service files
-COPY services/AgentService/main.py ./
-COPY services/AgentService/prompts.py ./
-
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
     build-essential \
@@ -23,6 +15,13 @@ COPY services/AgentService/flexagent /app/flexagent
 WORKDIR /app/flexagent/python
 RUN pip install --use-pep517 -e .
 WORKDIR /app
+
+COPY shared /shared
+RUN pip install /shared
+
+# Copy service files
+COPY services/AgentService/main.py ./
+COPY services/AgentService/prompts.py ./
 
 EXPOSE 8964
 

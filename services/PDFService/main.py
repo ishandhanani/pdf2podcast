@@ -1,6 +1,6 @@
 from fastapi import FastAPI, File, UploadFile, BackgroundTasks, HTTPException
-from shared.shared_types import ServiceType  # Import from shared_types
-from shared.job_status import JobStatusManager, JobStatus
+from shared.shared_types import ServiceType, JobStatus
+from shared.job_status import JobStatusManager
 from fastapi.responses import PlainTextResponse
 from docling.document_converter import DocumentConverter
 from pydantic import BaseModel

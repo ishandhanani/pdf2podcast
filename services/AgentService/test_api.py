@@ -16,14 +16,15 @@ def test_transcribe_api():
         "duration": 20,
         "speaker_1_name": "Kate",
         "speaker_2_name": "Bob",
-        "model": "meta/llama-3.1-405b-instruct"
+        "model": "meta/llama-3.1-405b-instruct",
+        "job_id": "123"
     }
 
     # Send POST request
     response = requests.post(AGENT_SERVICE_URL, json=payload)
 
     # Check if the request was successful
-    assert response.status_code == 200, f"Expected status code 200, but got {response.status_code}"
+    assert response.status_code == 202, f"Expected status code 200, but got {response.status_code}"
 
     # Parse the JSON response
     try:

@@ -10,13 +10,14 @@ RUN set -x \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
+
 WORKDIR /workspace
+
+RUN pip install fastapi uvicorn edge-tts elevenlabs pydantic redis
 
 # Copy shared package first
 COPY shared /shared
 RUN pip install /shared
-
-RUN pip install fastapi uvicorn edge-tts elevenlabs pydantic redis
 
 # Copy service files
 COPY services/TTSService/main.py ./
