@@ -1,4 +1,4 @@
-from fastapi import HTTPException, FastAPI, File, UploadFile, Form, BackgroundTasks, Response
+from fastapi import HTTPException, FastAPI, File, UploadFile, Form, BackgroundTasks, Response, WebSocket, WebSocketDisconnect
 from shared.shared_types import ServiceType, JobStatus, StatusUpdate
 import redis
 import requests
@@ -6,6 +6,11 @@ import json
 import os
 import logging
 import time
+import asyncio
+from typing import Dict, Set
+from collections import defaultdict
+from threading import Thread
+import queue
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -17,6 +22,158 @@ redis_client = redis.Redis.from_url(os.getenv("REDIS_URL", "redis://redis:6379")
 PDF_SERVICE_URL = os.getenv("PDF_SERVICE_URL", "http://localhost:8003")
 AGENT_SERVICE_URL = os.getenv("AGENT_SERVICE_URL", "http://localhost:8964")
 TTS_SERVICE_URL = os.getenv("TTS_SERVICE_URL", "http://localhost:8888")
+
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: Dict[str, Set[WebSocket]] = defaultdict(set)
+        self.pubsub = None
+        self.message_queue = queue.Queue()
+        self.redis_thread = None
+        self.should_stop = False
+        
+    async def connect(self, websocket: WebSocket, job_id: str):
+        await websocket.accept()
+        self.active_connections[job_id].add(websocket)
+        logger.info(f"New WebSocket connection for job {job_id}. Total connections: {len(self.active_connections[job_id])}")
+        
+        # Start Redis listener if not already running
+        if self.redis_thread is None:
+            self.redis_thread = Thread(target=self._redis_listener)
+            self.redis_thread.daemon = True
+            self.redis_thread.start()
+            # Start the async message processor
+            asyncio.create_task(self._process_messages())
+        
+    def disconnect(self, websocket: WebSocket, job_id: str):
+        if job_id in self.active_connections:
+            self.active_connections[job_id].remove(websocket)
+            if not self.active_connections[job_id]:
+                del self.active_connections[job_id]
+            logger.info(f"WebSocket disconnected for job {job_id}. Remaining connections: {len(self.active_connections[job_id]) if job_id in self.active_connections else 0}")
+
+    def _redis_listener(self):
+        """Redis subscription running in a separate thread"""
+        try:
+            self.pubsub = redis_client.pubsub(ignore_subscribe_messages=True)
+            self.pubsub.subscribe("status_updates:all")
+            logger.info("Successfully subscribed to Redis status_updates:all channel")
+            
+            while not self.should_stop:
+                message = self.pubsub.get_message()
+                if message and message['type'] == 'message':
+                    self.message_queue.put(message['data'])
+                time.sleep(0.01)  # Prevent tight loop
+                
+        except Exception as e:
+            logger.error(f"Redis subscription error: {e}")
+        finally:
+            if self.pubsub:
+                self.pubsub.unsubscribe()
+                self.pubsub.close()
+
+    async def _process_messages(self):
+        """Async task to process messages from the queue and broadcast them"""
+        while True:
+            try:
+                # Check queue in a non-blocking way
+                while not self.message_queue.empty():
+                    message = self.message_queue.get_nowait()
+                    try:
+                        if isinstance(message, bytes):
+                            message = message.decode('utf-8')
+                        
+                        update = json.loads(message)
+                        job_id = update.get('job_id')
+                        
+                        if job_id and job_id in self.active_connections:
+                            await self.broadcast_to_job(
+                                job_id,
+                                {
+                                    'service': update.get('service'),
+                                    'status': update.get('status'),
+                                    'message': update.get('message', '')
+                                }
+                            )
+                            logger.info(f"Broadcasted update for job {job_id}: {update.get('service')} - {update.get('status')}")
+                    except json.JSONDecodeError:
+                        logger.error(f"Invalid JSON in Redis message: {message}")
+                    except Exception as e:
+                        logger.error(f"Error processing Redis message: {e}")
+                        
+                # Small delay before next check
+                await asyncio.sleep(0.01)
+                
+            except Exception as e:
+                logger.error(f"Message processing error: {e}")
+                await asyncio.sleep(1)
+
+    async def broadcast_to_job(self, job_id: str, message: dict):
+        """Send message to all WebSocket connections for a job"""
+        if job_id in self.active_connections:
+            disconnected = set()
+            for connection in self.active_connections[job_id]:
+                try:
+                    await connection.send_json(message)
+                except WebSocketDisconnect:
+                    disconnected.add(connection)
+                except Exception as e:
+                    logger.error(f"Error sending message to WebSocket: {e}")
+                    disconnected.add(connection)
+            
+            # Clean up disconnected clients
+            for connection in disconnected:
+                self.disconnect(connection, job_id)
+
+    def cleanup(self):
+        """Cleanup resources"""
+        self.should_stop = True
+        if self.redis_thread:
+            self.redis_thread.join(timeout=1.0)
+        if self.pubsub:
+            self.pubsub.close()
+
+@app.websocket("/ws/status/{job_id}")
+async def websocket_endpoint(websocket: WebSocket, job_id: str):
+    try:
+        # Accept the WebSocket connection
+        await manager.connect(websocket, job_id)
+        
+        # Send initial status for all services
+        for service in ServiceType:
+            status_data = redis_client.hgetall(f"status:{job_id}:{service}")
+            if status_data:
+                status_msg = {
+                    "service": service.value,
+                    "status": status_data.get(b"status", b"").decode(),
+                    "message": status_data.get(b"message", b"").decode()
+                }
+                await websocket.send_json(status_msg)
+                logger.info(f"Sent initial status for {job_id} {service}: {status_msg}")
+        
+        # Keep connection alive and handle client messages
+        while True:
+            try:
+                # Wait for client messages (ping/pong handled automatically by FastAPI)
+                data = await websocket.receive_text()
+                if data == "ping":
+                    await websocket.send_text("pong")
+            except WebSocketDisconnect:
+                break
+            
+            await asyncio.sleep(0.1)
+            
+    except Exception as e:
+        logger.error(f"WebSocket error for job {job_id}: {e}")
+    finally:
+        manager.disconnect(websocket, job_id)
+
+# Initialize the connection manager
+manager = ConnectionManager()
+
+# # Cleanup on shutdown
+# @app.on_event("shutdown")
+# async def shutdown_event():
+#     manager.cleanup()
 
 def process_pdf_task(job_id: str, file_content: bytes, transcription_params: dict):
     try:

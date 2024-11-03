@@ -27,7 +27,7 @@ ELEVENLABS_VOICES = {
     "speaker-1": "iP95p4xoKVk53GoZ742B",
     "speaker-2": "9BWtsMINqrJLrRacOk9x",
 }
-MAX_CONCURRENT_REQUESTS = 5
+MAX_CONCURRENT_REQUESTS = int(os.getenv("MAX_CONCURRENT_REQUESTS", "5"))
 
 class TTSService:
     def __init__(self):

@@ -2,7 +2,21 @@ FROM python:3.9-slim
 
 WORKDIR /app
 
-RUN pip install fastapi uvicorn python-multipart requests pydantic redis
+# Install system dependencies if needed
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python packages
+RUN pip install --no-cache-dir \
+    fastapi \
+    uvicorn[standard] \
+    python-multipart \
+    requests \
+    pydantic \
+    redis \
+    websockets \
+    asyncio
 
 # Copy shared package first
 COPY shared /shared
@@ -11,4 +25,5 @@ RUN pip install /shared
 # Copy service files
 COPY services/APIService/main.py ./
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8002"]
+# Use uvicorn with websocket support enabled
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8002", "--ws", "auto"]

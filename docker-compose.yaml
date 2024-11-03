@@ -65,6 +65,7 @@ services:
     ports:
       - "8888:8888"
     environment:
+      - MAX_CONCURRENT_REQUESTS=${MAX_CONCURRENT_REQUESTS}
       - ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY}
       - REDIS_URL=redis://redis:6379
     depends_on:

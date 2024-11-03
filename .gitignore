@@ -2,6 +2,7 @@
 __pycache__
 tmp
 .venv
-output.mp3
+**/output.mp3
 kompose
 get_helm.sh
+.env
