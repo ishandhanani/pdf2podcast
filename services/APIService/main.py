@@ -39,6 +39,9 @@ PDF_SERVICE_URL = os.getenv("PDF_SERVICE_URL", "http://localhost:8003")
 AGENT_SERVICE_URL = os.getenv("AGENT_SERVICE_URL", "http://localhost:8964")
 TTS_SERVICE_URL = os.getenv("TTS_SERVICE_URL", "http://localhost:8889")
 
+# MP3 Cache TTL
+MP3_CACHE_TTL = 60 * 60 * 4  # 4 hours
+
 # CORS setup
 CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:3000")
 allowed_origins = [origin.strip() for origin in CORS_ORIGINS.split(",")]
@@ -258,10 +261,10 @@ def process_pdf_task(job_id: str, file_content: bytes, transcription_params: Tra
                             audio_content = requests.get(f"{TTS_SERVICE_URL}/output/{job_id}").content
                             
                             # Store both the content and the ready flag
-                            redis_client.set(f"result:{job_id}:{ServiceType.TTS}", audio_content)
-                            redis_client.set(f"final_status:{job_id}", "ready")
+                            redis_client.set(f"result:{job_id}:{ServiceType.TTS}", audio_content, ex=MP3_CACHE_TTL)
+                            redis_client.set(f"final_status:{job_id}", "ready", ex=MP3_CACHE_TTL)
                             
-                            logger.info(f"Stored TTS result for {job_id}, size: {len(audio_content)} bytes")
+                            logger.info(f"Stored TTS result for {job_id}, size: {len(audio_content)} bytes, with TTL: {MP3_CACHE_TTL} seconds")
                             return audio_content
 
             time.sleep(0.01)
@@ -311,6 +314,7 @@ async def get_status(job_id: str):
         
     return statuses
 
+# This needs to also interact with our db as well. Check cache first if job running. If nothing there, check db  
 @app.get("/output/{job_id}")
 async def get_output(job_id: str):
     """Get the final TTS output"""
