@@ -53,37 +53,40 @@ async def convert_pdf_to_markdown(pdf_path: str) -> str:
                 # Poll the status endpoint until the task is complete
                 while True:
                     status_response = await client.get(f"{MODEL_API_URL}/status/{task_id}")
+                    status_data = status_response.json()
+                    logger.info(f"Status check response: Code={status_response.status_code}, Data={status_data}")
                     
-                    if status_response.status_code != 200:
+                    if status_response.status_code == 200:
+                        # Task completed successfully
+                        result = status_data.get('result')
+                        if result:
+                            logger.info("Successfully received markdown result")
+                            return result
+                        logger.error(f"No result found in response data: {status_data}")
+                        raise HTTPException(
+                            status_code=500,
+                            detail="Server returned success but no result was found"
+                        )
+                    elif status_response.status_code == 425:
+                        # Task still processing
+                        logger.info("Task still processing, waiting 2 seconds...")
+                        await asyncio.sleep(2)
+                    else:
+                        error_msg = status_data.get('error', 'Unknown error')
+                        logger.error(f"Error response received: {error_msg}")
                         raise HTTPException(
                             status_code=status_response.status_code,
-                            detail=f"Status check failed: {status_response.text}"
+                            detail=f"PDF conversion failed: {error_msg}"
                         )
-                    
-                    status_data = status_response.json()
-                    
-                    if status_data['status'] == 'completed':
-                        if status_data['result']:
-                            return status_data['result']
-                        raise HTTPException(
-                            status_code=500,
-                            detail="Completed status received but no result found"
-                        )
-                    elif status_data['status'] == 'failed':
-                        raise HTTPException(
-                            status_code=500,
-                            detail=f"PDF conversion failed: {status_data.get('error', 'Unknown error')}"
-                        )
-                    
-                    # Wait before polling again
-                    await asyncio.sleep(2)
                 
         except httpx.TimeoutException:
+            logger.error("Request timed out")
             raise HTTPException(
                 status_code=504,
                 detail="Model API request timed out"
             )
         except httpx.RequestError as e:
+            logger.error(f"Request error: {str(e)}")
             raise HTTPException(
                 status_code=502,
                 detail=f"Error connecting to Model API: {str(e)}"

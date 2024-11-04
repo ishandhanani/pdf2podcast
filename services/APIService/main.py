@@ -37,7 +37,7 @@ redis_client = redis.Redis.from_url(os.getenv("REDIS_URL", "redis://redis:6379")
 # Service URLs
 PDF_SERVICE_URL = os.getenv("PDF_SERVICE_URL", "http://localhost:8003")
 AGENT_SERVICE_URL = os.getenv("AGENT_SERVICE_URL", "http://localhost:8964")
-TTS_SERVICE_URL = os.getenv("TTS_SERVICE_URL", "http://localhost:8888")
+TTS_SERVICE_URL = os.getenv("TTS_SERVICE_URL", "http://localhost:8889")
 
 # CORS setup
 CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:3000")

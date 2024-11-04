@@ -22,6 +22,6 @@ RUN pip install /shared
 # Copy service files
 COPY services/TTSService/main.py ./
 
-EXPOSE 8888
+EXPOSE 8889
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8888"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8889"]

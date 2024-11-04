@@ -51,35 +51,71 @@ async def convert_pdf(file: UploadFile = File(...)) -> Dict[str, str]:
             os.unlink(temp_file_path)
         raise HTTPException(status_code=500, detail=str(e))
 
+from fastapi import FastAPI, File, UploadFile, HTTPException
+from fastapi.responses import JSONResponse
+from celery.result import AsyncResult
+import os
+import logging
+from typing import Dict
+
 @app.get("/status/{task_id}")
-async def get_conversion_status(task_id: str) -> Dict[str, str]:
+async def get_conversion_status(task_id: str):
     """
     Check the status of a PDF conversion task
+    Returns:
+    - 200: Task completed successfully
+    - 425: Task is still processing
+    - 500: Task failed
     """
     try:
         task_result = AsyncResult(task_id)
         
         if task_result.ready():
             if task_result.successful():
-                return {
-                    "status": "completed",
-                    "result": task_result.get()
-                }
+                result = task_result.get()
+                if result:
+                    return JSONResponse(
+                        content={
+                            "status": "completed",
+                            "result": result
+                        },
+                        status_code=200
+                    )
+                else:
+                    return JSONResponse(
+                        content={
+                            "status": "failed",
+                            "error": "Task completed but no result was returned"
+                        },
+                        status_code=500
+                    )
             else:
                 error = str(task_result.result)
-                return {
-                    "status": "failed",
-                    "error": error
-                }
+                return JSONResponse(
+                    content={
+                        "status": "failed",
+                        "error": error
+                    },
+                    status_code=500
+                )
         else:
-            return {
-                "status": "processing",
-                "message": "Your PDF is still being converted"
-            }
+            return JSONResponse(
+                content={
+                    "status": "processing",
+                    "message": "Your PDF is still being converted"
+                },
+                status_code=425
+            )
 
     except Exception as e:
         logger.error(f"Error checking status: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        return JSONResponse(
+            content={
+                "status": "failed",
+                "error": str(e)
+            },
+            status_code=500
+        )
 
 @app.get("/health")
 async def health():

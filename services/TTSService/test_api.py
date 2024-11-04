@@ -37,7 +37,7 @@ def get_output_with_retry(base_url: str, job_id: str, max_retries=10, retry_dela
 
 def test_tts_api():
     # API endpoint URLs
-    base_url = os.getenv("TTS_SERVICE_URL", "http://localhost:8888")
+    base_url = os.getenv("TTS_SERVICE_URL", "http://localhost:8889")
     generate_url = f"{base_url}/generate_tts"
 
     print(f"[{get_time()}] Starting TTS test...")
