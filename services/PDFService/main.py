@@ -8,7 +8,7 @@ import os
 import logging
 import time
 import asyncio
-from typing import Optional, Union
+from typing import Optional, Union, Dict
 from pydantic import BaseModel
 
 logging.basicConfig(level=logging.INFO)
@@ -24,12 +24,9 @@ DEFAULT_TIMEOUT = 600  # seconds
 class PDFRequest(BaseModel):
     job_id: str
 
-class ConversionResult(BaseModel):
-    markdown: str
-
 class StatusResponse(BaseModel):
     status: str
-    result: Optional[Union[ConversionResult, str]] = None
+    result: Optional[Union[Dict[str, str], str]] = None
     error: Optional[str] = None
     message: Optional[str] = None
 

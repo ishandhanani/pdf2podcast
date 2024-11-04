@@ -23,23 +23,21 @@ celery_app.conf.update(
 )
 
 @celery_app.task(bind=True, max_retries=3)
-def convert_pdf_task(self, file_path: str) -> dict:
+def convert_pdf_task(self, file_path: str) -> str:  # Change return type hint
     try:
         converter = DocumentConverter()
         result = converter.convert(file_path)
         markdown = result.document.export_to_markdown()
-        
-        # Clean up file after successful conversion
         try:
             os.unlink(file_path)
             logger.info(f"Cleaned up file: {file_path}")
         except Exception as e:
             logger.error(f"Error cleaning up file: {e}")
-            
-        return {"markdown": markdown}
-        
+        logger.info("HELLO HERE I AM")
+        logger.info("HELLO HERE I AM")
+        logger.info(f"{markdown=}")
+        return markdown
     except Exception as exc:
         logger.error(f"Error converting PDF: {exc}")
-        # Retry with exponential backoff
-        retry_in = 5 * (2 ** self.request.retries)  # 5, 10, 20 seconds
+        retry_in = 5 * (2 ** self.request.retries)
         raise self.retry(exc=exc, countdown=retry_in)
