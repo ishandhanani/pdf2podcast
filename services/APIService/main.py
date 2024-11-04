@@ -1,6 +1,8 @@
 from fastapi import HTTPException, FastAPI, File, UploadFile, Form, BackgroundTasks, Response, WebSocket, WebSocketDisconnect
 from shared.shared_types import ServiceType, JobStatus, StatusUpdate
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, Field, ValidationError
+from typing import Dict, Set
 import redis
 import requests
 import json
@@ -8,13 +10,26 @@ import os
 import logging
 import time
 import asyncio
-from typing import Dict, Set
 from collections import defaultdict
 from threading import Thread
 import queue
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+class TranscriptionParams(BaseModel):
+    duration: int = Field(..., description="Duration in minutes")
+    speaker_1_name: str = Field(..., description="Name of the first speaker")
+    speaker_2_name: str = Field(..., description="Name of the second speaker")
+    model: str = Field(..., description="Model name/path to use for transcription")
+    voice_mapping: Dict[str, str] = Field(
+        ..., 
+        description="Mapping of speaker IDs to voice IDs",
+        example={
+            "speaker-1": "iP95p4xoKVk53GoZ742B",
+            "speaker-2": "9BWtsMINqrJLrRacOk9x"
+        }
+    )
 
 app = FastAPI(debug=True)
 redis_client = redis.Redis.from_url(os.getenv("REDIS_URL", "redis://redis:6379"), decode_responses=False)
@@ -185,12 +200,7 @@ async def websocket_endpoint(websocket: WebSocket, job_id: str):
 # Initialize the connection manager
 manager = ConnectionManager()
 
-# # Cleanup on shutdown
-# @app.on_event("shutdown")
-# async def shutdown_event():
-#     manager.cleanup()
-
-def process_pdf_task(job_id: str, file_content: bytes, transcription_params: dict):
+def process_pdf_task(job_id: str, file_content: bytes, transcription_params: TranscriptionParams):
     try:
         pubsub = redis_client.pubsub()
         pubsub.subscribe("status_updates:all")
@@ -224,7 +234,7 @@ def process_pdf_task(job_id: str, file_content: bytes, transcription_params: dic
                                 json={
                                     "markdown": markdown_content,
                                     "job_id": job_id,
-                                    **transcription_params
+                                    **transcription_params.model_dump()
                                 }
                             )
                             current_service = ServiceType.AGENT
@@ -236,7 +246,8 @@ def process_pdf_task(job_id: str, file_content: bytes, transcription_params: dic
                                 f"{TTS_SERVICE_URL}/generate_tts", 
                                 json={
                                     "dialogue": agent_result["dialogue"],
-                                    "job_id": job_id
+                                    "job_id": job_id,
+                                    "voice_mapping": transcription_params.voice_mapping  # Forward the voice mapping
                                 }
                             )
                             current_service = ServiceType.TTS
@@ -269,9 +280,12 @@ async def process_pdf(
         raise HTTPException(status_code=400, detail="Only PDF files are allowed")
 
     try:
-        params = json.loads(transcription_params)
+        params_dict = json.loads(transcription_params)
+        params = TranscriptionParams.model_validate(params_dict)
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="Invalid JSON in transcription_params")
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
     # Create job
     job_id = str(int(time.time()))

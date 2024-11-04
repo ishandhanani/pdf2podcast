@@ -153,7 +153,7 @@ def test_api(base_url: str):
         "duration": 5,
         "speaker_1_name": "Blackwell",
         "speaker_2_name": "Hopper",
-        "model": "meta/llama-3.1-405b-instruct",
+        "model": "nvidia/llama-3.1-nemotron-51b-instruct",
         "voice_mapping": voice_mapping  # Add voice mapping
     }
 

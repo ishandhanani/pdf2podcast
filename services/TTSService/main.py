@@ -15,42 +15,67 @@ from functools import lru_cache
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+app = FastAPI(title="ElevenLabs TTS Service", debug=True)
+job_manager = JobStatusManager(ServiceType.TTS)
+MAX_CONCURRENT_REQUESTS = int(os.getenv("MAX_CONCURRENT_REQUESTS", "5"))
+DEFAULT_VOICE_1 = os.getenv("DEFAULT_VOICE_1", "iP95p4xoKVk53GoZ742B")
+DEFAULT_VOICE_2 = os.getenv("DEFAULT_VOICE_2", "9BWtsMINqrJLrRacOk9x")
+DEFAULT_VOICE_MAPPING = {
+    "speaker-1": DEFAULT_VOICE_1,
+    "speaker-2": DEFAULT_VOICE_2
+}
+
 class DialogueEntry(BaseModel):
     text: str
     speaker: str
-    voice_id: Optional[str] = None  # Optional voice_id override
+    voice_id: Optional[str] = None
 
 class TTSRequest(BaseModel):
     dialogue: List[DialogueEntry]
     job_id: str
-    voice_mapping: Dict[str, str]  # Maps speaker names to voice IDs
+    scratchpad: Optional[str] = ""
+    voice_mapping: Optional[Dict[str, str]] = {
+        "speaker-1": DEFAULT_VOICE_1,
+        "speaker-2": DEFAULT_VOICE_2
+    }
 
 class VoiceInfo(BaseModel):
     voice_id: str
     name: str
     description: Optional[str] = None
 
-app = FastAPI(title="ElevenLabs TTS Service")
-job_manager = JobStatusManager(ServiceType.TTS)
-MAX_CONCURRENT_REQUESTS = int(os.getenv("MAX_CONCURRENT_REQUESTS", "5"))
-
 @lru_cache(maxsize=1)
 def get_available_voices() -> List[VoiceInfo]:
     """Fetch available voices from ElevenLabs API"""
     try:
         client = ElevenLabs(api_key=os.getenv("ELEVENLABS_API_KEY"))
-        voices = client.voices.get_all()
+        response = client.voices.get_all()
+        # Handle the response structure properly
+        voices_data = response.voices  # Access the voices list directly
+        
         return [
             VoiceInfo(
                 voice_id=voice.voice_id,
                 name=voice.name,
-                description=voice.description
+                description=voice.description if hasattr(voice, 'description') else None
             )
-            for voice in voices
+            for voice in voices_data
         ]
     except Exception as e:
         logger.error(f"Error fetching voices: {e}")
-        return []
+        # Return default voices if fetch fails
+        return [
+            VoiceInfo(
+                voice_id=DEFAULT_VOICE_1,
+                name="Default Voice 1",
+                description="Default speaker 1 voice"
+            ),
+            VoiceInfo(
+                voice_id=DEFAULT_VOICE_2,
+                name="Default Voice 2",
+                description="Default speaker 2 voice"
+            )
+        ]
 
 class TTSService:
     def __init__(self):
@@ -58,12 +83,18 @@ class TTSService:
 
     async def process_job(self, job_id: str, request: TTSRequest):
         try:
+            voice_mapping = request.voice_mapping
             # Validate voice mapping against available voices
-            available_voices = {voice.voice_id for voice in get_available_voices()}
-            invalid_voices = set(request.voice_mapping.values()) - available_voices
+            available_voices = get_available_voices()
+            available_voice_ids = {voice.voice_id for voice in available_voices}
+            invalid_voices = set(voice_mapping.values()) - available_voice_ids
             
             if invalid_voices:
-                raise ValueError(f"Invalid voice IDs: {invalid_voices}")
+                logger.warning(f"Using default voices. Invalid voice IDs: {invalid_voices}")
+                voice_mapping = {
+                    "speaker-1": DEFAULT_VOICE_1,
+                    "speaker-2": DEFAULT_VOICE_2
+                }
 
             job_manager.update_status(
                 job_id, 
@@ -94,7 +125,8 @@ class TTSService:
         tasks = [
             (
                 entry.text,
-                entry.voice_id or voice_mapping[entry.speaker]  # Use override if provided
+                entry.voice_id if entry.voice_id and entry.voice_id in voice_mapping.values()
+                else voice_mapping.get(entry.speaker, DEFAULT_VOICE_MAPPING[entry.speaker])
             )
             for entry in dialogue
         ]
