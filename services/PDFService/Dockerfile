@@ -8,7 +8,8 @@ RUN pip install --no-cache-dir \
     uvicorn \
     python-multipart \
     httpx \
-    redis
+    redis \
+    asyncio
 
 # Copy shared package
 COPY shared /shared

@@ -7,7 +7,8 @@ import tempfile
 import os
 import logging
 import time
-from typing import Optional
+import asyncio
+from typing import Optional, Union
 from pydantic import BaseModel
 
 logging.basicConfig(level=logging.INFO)
@@ -23,12 +24,22 @@ DEFAULT_TIMEOUT = 600  # seconds
 class PDFRequest(BaseModel):
     job_id: str
 
+class ConversionResult(BaseModel):
+    markdown: str
+
+class StatusResponse(BaseModel):
+    status: str
+    result: Optional[Union[ConversionResult, str]] = None
+    error: Optional[str] = None
+    message: Optional[str] = None
+
 async def convert_pdf_to_markdown(pdf_path: str) -> str:
     """Convert PDF to Markdown using the external API service"""
     logger.info(f"Sending PDF to external conversion service: {pdf_path}")
     
     async with httpx.AsyncClient(timeout=DEFAULT_TIMEOUT) as client:
         try:
+            # Initial conversion request
             with open(pdf_path, 'rb') as pdf_file:
                 files = {'file': ('document.pdf', pdf_file, 'application/pdf')}
                 response = await client.post(f"{MODEL_API_URL}/convert", files=files)
@@ -39,7 +50,38 @@ async def convert_pdf_to_markdown(pdf_path: str) -> str:
                         detail=f"Model API error: {response.text}"
                     )
                 
-                return response.json()['markdown']
+                task_data = response.json()
+                task_id = task_data['task_id']
+                
+                # Poll the status endpoint until the task is complete
+                while True:
+                    status_response = await client.get(f"{MODEL_API_URL}/status/{task_id}")
+                    
+                    if status_response.status_code != 200:
+                        raise HTTPException(
+                            status_code=status_response.status_code,
+                            detail=f"Status check failed: {status_response.text}"
+                        )
+                    
+                    status_data = StatusResponse(**status_response.json())
+                    
+                    if status_data.status == 'completed':
+                        if status_data.result:
+                            if isinstance(status_data.result, dict):
+                                return status_data.result.get('markdown', '')
+                            return str(status_data.result)
+                        raise HTTPException(
+                            status_code=500,
+                            detail="Completed status received but no result found"
+                        )
+                    elif status_data.status == 'failed':
+                        raise HTTPException(
+                            status_code=500,
+                            detail=f"PDF conversion failed: {status_data.error or 'Unknown error'}"
+                        )
+                    
+                    # Wait before polling again
+                    await asyncio.sleep(2)
                 
         except httpx.TimeoutException:
             raise HTTPException(
@@ -50,7 +92,7 @@ async def convert_pdf_to_markdown(pdf_path: str) -> str:
             raise HTTPException(
                 status_code=502,
                 detail=f"Error connecting to Model API: {str(e)}"
-            )
+            )        
 
 async def process_pdf(job_id: str, file_content: bytes):
     """Background task to process PDF conversion"""
@@ -76,6 +118,9 @@ async def process_pdf(job_id: str, file_content: bytes):
             # Convert the PDF to markdown using external service
             markdown_content = await convert_pdf_to_markdown(temp_file_path)
             
+            if not isinstance(markdown_content, str):
+                markdown_content = str(markdown_content)
+                
             # Store result
             job_manager.set_result(job_id, markdown_content.encode())
             job_manager.update_status(
