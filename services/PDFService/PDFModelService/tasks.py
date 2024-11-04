@@ -33,9 +33,6 @@ def convert_pdf_task(self, file_path: str) -> str:  # Change return type hint
             logger.info(f"Cleaned up file: {file_path}")
         except Exception as e:
             logger.error(f"Error cleaning up file: {e}")
-        logger.info("HELLO HERE I AM")
-        logger.info("HELLO HERE I AM")
-        logger.info(f"{markdown=}")
         return markdown
     except Exception as exc:
         logger.error(f"Error converting PDF: {exc}")

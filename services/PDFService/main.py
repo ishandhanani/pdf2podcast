@@ -26,7 +26,7 @@ class PDFRequest(BaseModel):
 
 class StatusResponse(BaseModel):
     status: str
-    result: Optional[Union[Dict[str, str], str]] = None
+    result: Optional[str] = None
     error: Optional[str] = None
     message: Optional[str] = None
 
@@ -60,21 +60,19 @@ async def convert_pdf_to_markdown(pdf_path: str) -> str:
                             detail=f"Status check failed: {status_response.text}"
                         )
                     
-                    status_data = StatusResponse(**status_response.json())
+                    status_data = status_response.json()
                     
-                    if status_data.status == 'completed':
-                        if status_data.result:
-                            if isinstance(status_data.result, dict):
-                                return status_data.result.get('markdown', '')
-                            return str(status_data.result)
+                    if status_data['status'] == 'completed':
+                        if status_data['result']:
+                            return status_data['result']
                         raise HTTPException(
                             status_code=500,
                             detail="Completed status received but no result found"
                         )
-                    elif status_data.status == 'failed':
+                    elif status_data['status'] == 'failed':
                         raise HTTPException(
                             status_code=500,
-                            detail=f"PDF conversion failed: {status_data.error or 'Unknown error'}"
+                            detail=f"PDF conversion failed: {status_data.get('error', 'Unknown error')}"
                         )
                     
                     # Wait before polling again
@@ -89,7 +87,7 @@ async def convert_pdf_to_markdown(pdf_path: str) -> str:
             raise HTTPException(
                 status_code=502,
                 detail=f"Error connecting to Model API: {str(e)}"
-            )        
+            )
 
 async def process_pdf(job_id: str, file_content: bytes):
     """Background task to process PDF conversion"""
@@ -164,9 +162,10 @@ async def convert_pdf(
     return {"job_id": job_id}
 
 @app.get("/status/{job_id}")
-async def get_status(job_id: str):
+async def get_status(job_id: str) -> StatusResponse:  # Add return type annotation
     """Get status of PDF conversion job"""
-    return job_manager.get_status(job_id)
+    status_data = job_manager.get_status(job_id)
+    return StatusResponse(**status_data)
 
 @app.get("/output/{job_id}", response_class=PlainTextResponse)
 async def get_output(job_id: str):
