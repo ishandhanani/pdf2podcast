@@ -34,10 +34,9 @@ async def convert_pdf_to_markdown(pdf_path: str) -> str:
                 response = await client.post(f"{MODEL_API_URL}/convert", files=files)
                 
                 if response.status_code != 200:
-                    error_detail = response.json().get('detail', 'Unknown error')
                     raise HTTPException(
                         status_code=response.status_code,
-                        detail=f"Model API error: {error_detail}"
+                        detail=f"Model API error: {response.text}"
                     )
                 
                 return response.json()['markdown']

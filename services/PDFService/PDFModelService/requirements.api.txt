@@ -1,0 +1,6 @@
+fastapi
+python-multipart
+uvicorn
+celery[redis]
+redis
+docling==2.2.0
