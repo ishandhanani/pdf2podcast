@@ -143,7 +143,7 @@ def test_api(base_url: str):
 
     # Path to a sample PDF file for testing
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    sample_pdf_path = os.path.join(current_dir, "PNP_Proof.pdf")
+    sample_pdf_path = os.path.join(current_dir, "sample.pdf")
     
     # Ensure the sample PDF file exists
     assert os.path.exists(sample_pdf_path), f"Sample PDF file not found at {sample_pdf_path}"
@@ -153,7 +153,7 @@ def test_api(base_url: str):
         "duration": 5,
         "speaker_1_name": "Blackwell",
         "speaker_2_name": "Hopper",
-        "model": "nvidia/llama-3.1-nemotron-51b-instruct",
+        "model": "meta/llama-3.1-405b-instruct",
         "voice_mapping": voice_mapping  # Add voice mapping
     }
 
