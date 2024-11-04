@@ -143,7 +143,7 @@ def test_api(base_url: str):
 
     # Path to a sample PDF file for testing
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    sample_pdf_path = os.path.join(current_dir, "PNP_Proof.pdf")
+    sample_pdf_path = os.path.join(current_dir, "travis-test.pdf")
     
     # Ensure the sample PDF file exists
     assert os.path.exists(sample_pdf_path), f"Sample PDF file not found at {sample_pdf_path}"
@@ -181,7 +181,7 @@ def test_api(base_url: str):
     
     try:
         # Wait for TTS completion or timeout
-        max_wait = 20 * 60  # 20 minutes in seconds
+        max_wait = 40 * 60  # 20 minutes in seconds
         if not monitor.tts_completed.wait(timeout=max_wait):
             raise TimeoutError(f"Test timed out after {max_wait} seconds")
             

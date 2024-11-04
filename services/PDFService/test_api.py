@@ -2,6 +2,7 @@ import requests
 import os
 import time
 from typing import Optional
+from shared.shared_types import StatusResponse
 
 PDF_SERVICE_URL = os.getenv("PDF_SERVICE_URL", "http://localhost:8003")
 POLL_INTERVAL = 2  # seconds
@@ -15,21 +16,21 @@ def poll_job_status(job_id: str) -> Optional[dict]:
     while time.time() - start_time < MAX_WAIT_TIME:
         try:
             response = requests.get(f"{PDF_SERVICE_URL}/status/{job_id}")
-            status_data = response.json()
+            status_data = StatusResponse.model_validate(response.json())
             # print(f"Polling status... Response: {status_data}")
             
             # Check the job status from the response
-            if status_data.get('status') == 'JobStatus.COMPLETED':
+            if status_data.status == 'JobStatus.COMPLETED':
                 return status_data
-            elif status_data.get('status') == 'JobStatus.FAILED':
-                print(f"Job failed: {status_data.get('error', 'Unknown error')}")
+            elif status_data.status == 'JobStatus.FAILED':
+                print(f"Job failed: {status_data.message}")
                 return None
-            elif status_data.get('status') == 'JobStatus.PROCESSING':
-                print(f"Job still processing... {status_data.get('message', '')}")
+            elif status_data.status == 'JobStatus.PROCESSING':
+                print(f"Job still processing... {status_data.message}")
                 time.sleep(POLL_INTERVAL)
                 continue
             else:
-                print(f"Unknown status: {status_data.get('status')}")
+                print(f"Unknown status: {status_data.status}")
                 time.sleep(POLL_INTERVAL)
                 
         except requests.RequestException as e:
@@ -42,7 +43,7 @@ def poll_job_status(job_id: str) -> Optional[dict]:
 def test_convert_pdf_endpoint():
     # Path to a sample PDF file for testing
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    sample_pdf_path = os.path.join(current_dir, "../../sample.pdf")
+    sample_pdf_path = os.path.join(current_dir, "../../PNP_Proof.pdf")
 
     # Ensure the sample PDF file exists
     if not os.path.exists(sample_pdf_path):

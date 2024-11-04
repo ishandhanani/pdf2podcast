@@ -1,5 +1,5 @@
 from fastapi import FastAPI, File, UploadFile, BackgroundTasks, HTTPException
-from shared.shared_types import ServiceType, JobStatus
+from shared.shared_types import ServiceType, JobStatus, StatusResponse
 from shared.job import JobStatusManager
 from fastapi.responses import PlainTextResponse
 import httpx
@@ -24,12 +24,6 @@ DEFAULT_TIMEOUT = 600  # seconds
 class PDFRequest(BaseModel):
     job_id: str
 
-class StatusResponse(BaseModel):
-    status: str
-    result: Optional[str] = None
-    error: Optional[str] = None
-    message: Optional[str] = None
-
 async def convert_pdf_to_markdown(pdf_path: str) -> str:
     """Convert PDF to Markdown using the external API service"""
     logger.info(f"Sending PDF to external conversion service: {pdf_path}")
@@ -39,6 +33,7 @@ async def convert_pdf_to_markdown(pdf_path: str) -> str:
             # Initial conversion request
             with open(pdf_path, 'rb') as pdf_file:
                 files = {'file': ('document.pdf', pdf_file, 'application/pdf')}
+                logger.info(f"Sending PDF to model API: {MODEL_API_URL}")
                 response = await client.post(f"{MODEL_API_URL}/convert", files=files)
                 
                 if response.status_code != 200:

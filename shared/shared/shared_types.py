@@ -20,3 +20,9 @@ class StatusUpdate(BaseModel):
     service: Optional[ServiceType] = None
     timestamp: Optional[float] = None
     data: Optional[dict] = None
+
+class StatusResponse(BaseModel):
+    status: str
+    result: Optional[str] = None
+    error: Optional[str] = None
+    message: Optional[str] = None

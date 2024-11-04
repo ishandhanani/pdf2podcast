@@ -3,6 +3,7 @@ import sys
 import json
 import time
 from pathlib import Path
+from shared.shared_types import StatusResponse
 
 def test_pdf_conversion(pdf_path: str, api_url: str = "http://localhost:8003"):
     """
@@ -47,22 +48,31 @@ def test_pdf_conversion(pdf_path: str, api_url: str = "http://localhost:8003"):
         # Poll the status endpoint until the task is complete
         while True:
             status_response = requests.get(f"{api_url}/status/{task_id}")
-            status_response.raise_for_status()
-            status_data = status_response.json()
 
-            if status_data['status'] == 'completed':
-                print("\nConversion successful!")
-                print("\nMarkdown output:")
-                print("-" * 50)
-                print(status_data['result']['markdown'])
-                print("-" * 50)
-                break
-            elif status_data['status'] == 'failed':
-                print(f"\nConversion failed: {status_data.get('error', 'Unknown error')}")
-                break
-            else:
-                print(".", end="", flush=True)
-                time.sleep(2)  # Wait 2 seconds before checking again
+            try :
+                status_data = StatusResponse.model_validate(status_response.json())
+                print(f"Status check response: Code={status_response.status_code}, Data={status_data}")
+                        
+                if status_response.status_code == 200:
+                    # Task completed successfully
+                    result = status_data.result
+                    if result:
+                        print(f"Successfully received markdown result: {result}")
+                        return True
+                    print(f"No result found in response data: {status_data}")
+                    return False
+                elif status_response.status_code == 425:
+                    # Task still processing
+                    print("Task still processing, waiting 2 seconds...")
+                    time.sleep(2)
+                else:
+                    error_msg = status_data.error
+                    print(f"Error response received: {error_msg}")
+                    return False
+            except Exception as e:
+                print(f"Error checking status: {str(e)}")
+                return False
+
         
     except requests.exceptions.RequestException as e:
         print(f"Error during conversion: {e}")

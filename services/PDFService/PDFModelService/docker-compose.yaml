@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+  redis:
+    image: redis:latest
+    command: redis-server --port 6380
+    ports:
+      - "6380:6380"
+    volumes:
+      - redis_data:/data
+
+  pdf-model-service:
+    build:
+      context: ../../..  # Go up to the root directory
+      dockerfile: services/PDFService/PDFModelService/Dockerfile
+    ports:
+      - "8003:8003"
+    environment:
+      - REDIS_URL=redis://redis:6380 
+    depends_on:
+      - redis
+
+volumes:
+  redis_data:
