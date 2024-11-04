@@ -10,7 +10,7 @@ services:
       - app-network
 
   api-service:
-    image: nvcr.io/pfteb4cqjzrs/playground/api-service:0.7
+    image: nvcr.io/pfteb4cqjzrs/playground/api-service:0.8
     ports:
       - "8002:8002"
     environment:
@@ -27,7 +27,7 @@ services:
       - app-network
 
   agent-service:
-    image: nvcr.io/pfteb4cqjzrs/playground/agent-service:0.7
+    image: nvcr.io/pfteb4cqjzrs/playground/agent-service:0.8
     ports:
       - "8964:8964"
     environment:
@@ -42,7 +42,7 @@ services:
       - app-network
 
   pdf-service:
-    image: nvcr.io/pfteb4cqjzrs/playground/pdf-service:0.7
+    image: nvcr.io/pfteb4cqjzrs/playground/pdf-service:0.8
     ports:
       - "8003:8003"
     environment:
@@ -53,7 +53,7 @@ services:
       - app-network
 
   tts-service:
-    image: nvcr.io/pfteb4cqjzrs/playground/tts-service:0.7
+    image: nvcr.io/pfteb4cqjzrs/playground/tts-service:0.8
     ports:
       - "8888:8888"
     environment:
