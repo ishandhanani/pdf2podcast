@@ -3,6 +3,8 @@ from shared.shared_types import ServiceType, JobStatus, StatusUpdate
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, ValidationError
 from typing import Dict, Set
+from minio import Minio
+from minio.error import S3Error
 import redis
 import requests
 import json
@@ -38,6 +40,15 @@ redis_client = redis.Redis.from_url(os.getenv("REDIS_URL", "redis://redis:6379")
 PDF_SERVICE_URL = os.getenv("PDF_SERVICE_URL", "http://localhost:8003")
 AGENT_SERVICE_URL = os.getenv("AGENT_SERVICE_URL", "http://localhost:8964")
 TTS_SERVICE_URL = os.getenv("TTS_SERVICE_URL", "http://localhost:8889")
+
+# Minio config
+MINIO_ENDPOINT = os.getenv("MINIO_ENDPOINT", "minio:9000")
+MINIO_ACCESS_KEY = os.getenv("MINIO_ACCESS_KEY", "minioadmin")
+MINIO_SECRET_KEY = os.getenv("MINIO_SECRET_KEY", "minioadmin")
+MINIO_BUCKET_NAME = os.getenv("MINIO_BUCKET_NAME", "audio-results")
+
+# MP3 Cache TTL
+MP3_CACHE_TTL = 60 * 60 * 4  # 4 hours
 
 # CORS setup
 CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:3000")
@@ -200,6 +211,57 @@ async def websocket_endpoint(websocket: WebSocket, job_id: str):
 # Initialize the connection manager
 manager = ConnectionManager()
 
+# TODO: use this to wrap redis as well
+# TODO: wrap errors in StorageError
+# TODO: implement cleanup and delete as well
+class StorageManager:
+    def __init__(self):
+        """Initialize MinIO client and ensure bucket exists"""
+        try:
+            self.client = Minio(
+                os.getenv("MINIO_ENDPOINT", "minio:9000"),
+                access_key=os.getenv("MINIO_ACCESS_KEY", "minioadmin"),
+                secret_key=os.getenv("MINIO_SECRET_KEY", "minioadmin"),
+                secure=os.getenv("MINIO_SECURE", "false").lower() == "true"
+            )
+            
+            self.bucket_name = os.getenv("MINIO_BUCKET_NAME", "audio-results")
+            self._ensure_bucket_exists()
+            logger.info("Successfully initialized MinIO storage")
+            
+        except Exception as e:
+            logger.error(f"Failed to initialize MinIO client: {e}")
+            raise
+
+    def _ensure_bucket_exists(self):
+        try:    
+            if not self.client.bucket_exists(self.bucket_name):
+                self.client.make_bucket(self.bucket_name)
+        except Exception as e:
+            logger.error(f"Failed to ensure bucket exists: {e}")
+            raise
+    
+    def store_audio(self, job_id: str, audio_content: bytes, filename: str, transcription_params: TranscriptionParams):
+        try:
+            object_name = f"{job_id}/{filename}"
+            self.client.put_object(self.bucket_name, object_name, io.BytesIO(audio_content), len(audio_content), content_type="audio/mpeg")
+            logger.info(f"Stored audio for {job_id} in MinIO as {object_name}")
+        except S3Error as e:
+            logger.error(f"Failed to store audio in MinIO: {e}")
+            raise
+            
+    def get_audio(self, job_id: str, filename: str):
+        try:
+            object_name = f"{job_id}/{filename}"
+            result = self.client.get_object(self.bucket_name, object_name).read()
+            logger.info(f"Retrieved audio for {job_id} from MinIO as {object_name}")
+            return result
+        except S3Error as e:
+            logger.error(f"Failed to get audio from MinIO: {e}")
+            raise
+
+storage_manager = StorageManager()  
+
 def process_pdf_task(job_id: str, file_content: bytes, transcription_params: TranscriptionParams):
     try:
         pubsub = redis_client.pubsub()
@@ -258,10 +320,13 @@ def process_pdf_task(job_id: str, file_content: bytes, transcription_params: Tra
                             audio_content = requests.get(f"{TTS_SERVICE_URL}/output/{job_id}").content
                             
                             # Store both the content and the ready flag
-                            redis_client.set(f"result:{job_id}:{ServiceType.TTS}", audio_content)
-                            redis_client.set(f"final_status:{job_id}", "ready")
+                            redis_client.set(f"result:{job_id}:{ServiceType.TTS}", audio_content, ex=MP3_CACHE_TTL)
+                            redis_client.set(f"final_status:{job_id}", "ready", ex=MP3_CACHE_TTL)
                             
-                            logger.info(f"Stored TTS result for {job_id}, size: {len(audio_content)} bytes")
+                            # Store in DB
+                            storage_manager.store_audio(job_id, audio_content, f"{job_id}.mp3", transcription_params)
+
+                            logger.info(f"Stored TTS result for {job_id}, size: {len(audio_content)} bytes, with TTL: {MP3_CACHE_TTL} seconds")
                             return audio_content
 
             time.sleep(0.01)
@@ -311,6 +376,7 @@ async def get_status(job_id: str):
         
     return statuses
 
+# This needs to also interact with our db as well. Check cache first if job running. If nothing there, check db  
 @app.get("/output/{job_id}")
 async def get_output(job_id: str):
     """Get the final TTS output"""
@@ -350,3 +416,11 @@ async def cleanup_jobs():
             redis_client.delete(f"result:{job_id}:{service}")
             removed += 1
     return {"message": f"Removed {removed} old jobs"}
+
+# Minio config
+MINIO_ENDPOINT = os.getenv("MINIO_ENDPOINT", "minio:9000")
+MINIO_ACCESS_KEY = os.getenv("MINIO_ACCESS_KEY", "minioadmin")
+MINIO_SECRET_KEY = os.getenv("MINIO_SECRET_KEY", "minioadmin")
+MINIO_BUCKET_NAME = os.getenv("MINIO_BUCKET_NAME", "audio-results")
+
+#initialize minio client
