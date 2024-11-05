@@ -8,7 +8,6 @@ services:
     command: redis-server --appendonly no
     networks:
       - app-network
-
   minio:
     image: minio/minio:latest
     ports:
@@ -27,9 +26,8 @@ services:
       interval: 30s
       timeout: 20s
       retries: 5
-
   api-service:
-    image: nvcr.io/pfteb4cqjzrs/playground/api-service:1.1
+    image: nvcr.io/pfteb4cqjzrs/playground/api-service:${VERSION:-1.1}
     ports:
       - "8002:8002"
     environment:
@@ -44,26 +42,22 @@ services:
       - tts-service
     networks:
       - app-network
-
   agent-service:
-    image: nvcr.io/pfteb4cqjzrs/playground/agent-service:1.1
+    image: nvcr.io/pfteb4cqjzrs/playground/agent-service:${VERSION:-1.1}
     ports:
       - "8964:8964"
     environment:
       - NIM_KEY=${NIM_KEY}
       - REDIS_URL=redis://redis:6379
       - MODEL_CONFIG_PATH=/app/config/models.json
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     volumes:
       - ./models.json:/app/config/models.json
     depends_on:
       - redis
     networks:
       - app-network
-
   pdf-service:
-    image: nvcr.io/pfteb4cqjzrs/playground/pdf-service:1.1
+    image: nvcr.io/pfteb4cqjzrs/playground/pdf-service:${VERSION:-1.1}
     ports:
       - "8003:8003"
     environment:
@@ -73,9 +67,8 @@ services:
       - redis
     networks:
       - app-network
-
   tts-service:
-    image: nvcr.io/pfteb4cqjzrs/playground/tts-service:1.1
+    image: nvcr.io/pfteb4cqjzrs/playground/tts-service:${VERSION:-1.1}
     ports:
       - "8889:8889"
     environment:
@@ -86,11 +79,9 @@ services:
       - redis
     networks:
       - app-network
-
 volumes:
   redis_data:
   minio_data:
-
 networks:
   app-network:
     driver: bridge
