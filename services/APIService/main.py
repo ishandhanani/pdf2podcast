@@ -396,7 +396,10 @@ async def get_output(job_id: str):
 
     result = redis_client.get(f"result:{job_id}:{ServiceType.TTS}")
     if not result:
-        raise HTTPException(status_code=404, detail="Result not found")
+        logger.info(f"Final result not found in cache for {job_id}. Checking DB...")
+        result = storage_manager.get_audio(job_id, f"{job_id}.mp3")
+        if not result:
+            raise HTTPException(status_code=404, detail="Result not found")
 
     return Response(
         content=result,
@@ -416,11 +419,3 @@ async def cleanup_jobs():
             redis_client.delete(f"result:{job_id}:{service}")
             removed += 1
     return {"message": f"Removed {removed} old jobs"}
-
-# Minio config
-MINIO_ENDPOINT = os.getenv("MINIO_ENDPOINT", "minio:9000")
-MINIO_ACCESS_KEY = os.getenv("MINIO_ACCESS_KEY", "minioadmin")
-MINIO_SECRET_KEY = os.getenv("MINIO_SECRET_KEY", "minioadmin")
-MINIO_BUCKET_NAME = os.getenv("MINIO_BUCKET_NAME", "audio-results")
-
-#initialize minio client

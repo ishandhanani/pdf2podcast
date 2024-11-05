@@ -143,7 +143,13 @@ def test_api(base_url: str):
 
     # Path to a sample PDF file for testing
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    sample_pdf_path = os.path.join(current_dir, "PNP_Proof.pdf")
+    samples_dir = os.path.join(current_dir, "samples")
+
+    # Ensure samples directory exists
+    if not os.path.exists(samples_dir):
+        raise FileNotFoundError(f"Samples directory not found at {samples_dir}")
+
+    sample_pdf_path = os.path.join(samples_dir, "travis-test.pdf")
     
     # Ensure the sample PDF file exists
     assert os.path.exists(sample_pdf_path), f"Sample PDF file not found at {sample_pdf_path}"
@@ -201,6 +207,6 @@ def test_api(base_url: str):
         monitor.stop()
 
 if __name__ == "__main__":
-    base_url = os.getenv("API_SERVICE_URL", "https://api-pc8kmx5ae.brevlab.com")
+    base_url = os.getenv("API_SERVICE_URL", "http://localhost:8002")
     print(f"{base_url=}")
     test_api(base_url)
