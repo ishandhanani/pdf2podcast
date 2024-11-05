@@ -21,14 +21,14 @@ jobs:
         run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_ENV
 
       - name: Login to Container Registry
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
           registry: nvcr.io
           username: ${{ secrets.NVCR_USERNAME }}
           password: ${{ secrets.NVCR_TOKEN }}
 
       - name: Build and push api-service
-        uses: docker/build-push-action@v4
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: services/APIService/Dockerfile
@@ -36,7 +36,7 @@ jobs:
           tags: nvcr.io/pfteb4cqjzrs/playground/api-service:${{ env.VERSION }}
 
       - name: Build and push agent-service
-        uses: docker/build-push-action@v4
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: services/AgentService/Dockerfile
@@ -44,7 +44,7 @@ jobs:
           tags: nvcr.io/pfteb4cqjzrs/playground/agent-service:${{ env.VERSION }}
 
       - name: Build and push pdf-service
-        uses: docker/build-push-action@v4
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: services/PDFService/Dockerfile
@@ -52,7 +52,7 @@ jobs:
           tags: nvcr.io/pfteb4cqjzrs/playground/pdf-service:${{ env.VERSION }}
 
       - name: Build and push tts-service
-        uses: docker/build-push-action@v4
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: services/TTSService/Dockerfile
@@ -60,7 +60,7 @@ jobs:
           tags: nvcr.io/pfteb4cqjzrs/playground/tts-service:${{ env.VERSION }}
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           name: Release ${{ env.VERSION }}
           body: |
