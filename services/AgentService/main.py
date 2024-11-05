@@ -73,6 +73,11 @@ class LLMManager:
             "api_base": "https://integrate.api.nvidia.com/v1",
             "backend_type": "nim"
         },
+        "subsegments": {
+            "name": "meta/llama-3.1-405b-instruct",
+            "api_base": "https://integrate.api.nvidia.com/v1",
+            "backend_type": "nim"
+        },
         "json": {
             "name": "meta/llama-3.1-70b-instruct",
             "api_base": "https://nim-pc8kmx5ae.brevlab.com/v1",
@@ -274,7 +279,6 @@ def deep_dive_segment(
     job_manager.update_status(job_id, JobStatus.PROCESSING, status_msg)
     logger.info(f"Job {job_id}: {status_msg}")
     
-    # Generate detailed outline
     prompt = DEEP_DIVE_PROMPT.render(
         text=text,
         topic=segment["descriptions"],
@@ -282,7 +286,6 @@ def deep_dive_segment(
     )
     outline = llm_manager.query("reasoning", [{"role": "user", "content": prompt}])
 
-    # Convert to structured format
     prompt = OUTLINE_PROMPT.render(
         text=outline,
         schema=json.dumps(schema, indent=2)
@@ -291,7 +294,6 @@ def deep_dive_segment(
         llm_manager.query("json", [{"role": "user", "content": prompt}], json_schema=schema)
     )
     
-    # Process subsegments
     segments = []
     for subsegment in outline_json["segments"]:
         job_manager.update_status(
@@ -306,7 +308,7 @@ def deep_dive_segment(
             angles="\n".join(subsegment["descriptions"])
         )
         segments.append(
-            llm_manager.query("reasoning", [{"role": "user", "content": prompt}], sync=False)
+            llm_manager.query("subsegments", [{"role": "user", "content": prompt}], sync=False)
         )
     
     texts = [segment.get() for segment in segments]
