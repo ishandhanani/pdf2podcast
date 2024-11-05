@@ -302,7 +302,10 @@ def process_transcription(job_id: str, request: TranscriptionRequest):
 
         # Store result
         result = json.loads(final_conversation)
-        job_manager.set_result(job_id, json.dumps(result).encode())
+        # Expire the result after 2 minutes
+        job_manager.set_result_with_expiration(
+            job_id, json.dumps(result).encode(), ex=120
+        )
         job_manager.update_status(
             job_id, JobStatus.COMPLETED, "Transcription completed successfully"
         )
