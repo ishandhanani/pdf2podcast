@@ -51,7 +51,6 @@ services:
       - "8003:8003"
     environment:
       - REDIS_URL=redis://redis:6379
-      - MODEL_API_URL=${MODEL_API_URL}
     depends_on:
       - redis
     networks:

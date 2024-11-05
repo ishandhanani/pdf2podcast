@@ -1,6 +1,6 @@
 # Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
 import os
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 
 from .openai import OpenAIBackend
 from .registry import reg
@@ -48,11 +48,10 @@ class NIMBackend(OpenAIBackend):
     def __init__(
         self,
         model_name: str,
+        api_base: str,
         api_key: Optional[str] = None,
-        api_base: str = None,
     ):
         api_key = api_key or os.getenv("NIM_KEY")
-        api_base = api_base or os.getenv("API_BASE")
         self.max_retry = 5
         if not api_key:
             raise ValueError(
@@ -65,6 +64,7 @@ class NIMBackend(OpenAIBackend):
         self,
         messages: List[Dict[str, str]],
         sampling_params: Optional[SamplingParams] = None,
+        extra_body: Optional[Dict[str, Any]] = None,
     ) -> str:
         """
         Generate text using the NIM API based on the given prompts and parameters.
@@ -94,7 +94,7 @@ class NIMBackend(OpenAIBackend):
         # NIM-specific adjustments can be made here if needed in the future
         for _ in range(self.max_retry):
             try:
-                return super().generate(messages, sampling_params)
+                return super().generate(messages, sampling_params, extra_body=extra_body)
             except Exception as e:
                 logging.error(f"Error generating text: {e}")
         raise Exception("Failed to generate text after multiple retries")
@@ -124,4 +124,4 @@ def get_nim_backend(
     >>> print(response)
     The capital of France is Paris.
     """
-    return NIMBackend(model_name, api_key)
+    return NIMBackend(model_name=model_name, api_key=api_key, api_base=api_base)

@@ -53,13 +53,32 @@ class TranscriptionRequest(BaseModel):
 app = FastAPI(debug=True)
 job_manager = JobStatusManager(ServiceType.AGENT)
 
-def retry_nim_request(llm, messages, retries=5, sync=True):
+def get_llm(model_name: str, backend_type: str = "nim"):
+    # Use hardcoded base URL for 70B model, API_BASE env var for 405B
+    api_base = "https://nim-pc8kmx5ae.brevlab.com/v1" if model_name == "meta/llama-3.1-70b-instruct" else os.getenv("API_BASE")
+    
+    backend = BackendConfig(
+        backend_type=backend_type,
+        model_name=model_name,
+        api_key=os.getenv("NIM_KEY"),
+        api_base=api_base
+    )
+    return fa.ops.LLM().to(backend)
+
+def retry_nim_request(llm, messages, retries=5, sync=True, json_schema=None):
     for _ in range(retries):
         try:
+            extra_body = None
+            if json_schema:
+                extra_body = {
+                    "nvext": {
+                        "guided_json": json_schema
+                    }
+                }
             if sync:
-                return llm(messages).get()
+                return llm(messages, extra_body=extra_body).get()
             else:
-                return llm(messages)
+                return llm(messages, extra_body=extra_body)
         except Exception as e:
             logger.error(f"Failed to get response: {e}")
             time.sleep(3)
@@ -67,31 +86,26 @@ def retry_nim_request(llm, messages, retries=5, sync=True):
 
 def process_transcription(job_id: str, request: TranscriptionRequest):
     try:
-        # Initialize LLM
-        job_manager.update_status(job_id, JobStatus.PROCESSING, "Initializing LLM")
+        # Initialize LLMs
+        job_manager.update_status(job_id, JobStatus.PROCESSING, "Initializing LLMs")
+        reasoning_llm = get_llm(request.model)
+        json_llm = get_llm("meta/llama-3.1-70b-instruct")
+        
         schema = PodcastOutline.model_json_schema()
-        backend = BackendConfig(
-            backend_type="nim",
-            model_name=request.model,
-            api_key=os.getenv("NIM_KEY"),
-            api_base=os.getenv("API_BASE")
-        )
-        llm = fa.ops.LLM().to(backend)
 
-        # Get raw outline
+        # Get raw outline using 405B (complex reasoning)
         job_manager.update_status(job_id, JobStatus.PROCESSING, "Generating initial outline")
         prompt = RAW_OUTLINE_PROMPT.render(text=request.markdown, duration=request.duration)
         messages = [{"role": "user", "content": prompt}]
-        raw_outline = retry_nim_request(llm, messages)
+        raw_outline = retry_nim_request(reasoning_llm, messages)
 
-        # Process outline
+        # Process outline using 70B (JSON formatting)
         job_manager.update_status(job_id, JobStatus.PROCESSING, "Converting raw outline to structured format")
         prompt = OUTLINE_PROMPT.render(text=raw_outline, schema=json.dumps(schema, indent=2))
         messages = [{"role": "user", "content": prompt}]
-        outline = retry_nim_request(llm, messages)
-        outline_json = json.loads(fa.utils.json_func.extract_json(outline))
-        job_manager.update_status(job_id, JobStatus.PROCESSING, f"Generated outline: {json.dumps(outline_json, indent=2)}")
-
+        outline = retry_nim_request(json_llm, messages, json_schema=schema)
+        outline_json = json.loads(outline)
+        
         # Process segments
         longest_segment_idx = max(range(len(outline_json["segments"])), 
                                 key=lambda i: outline_json["segments"][i]["duration"])
@@ -106,10 +120,11 @@ def process_transcription(job_id: str, request: TranscriptionRequest):
             )
             
             if idx == longest_segment_idx:
-                ret = deep_dive_segment(job_id, request.markdown, segment, llm)
+                ret = deep_dive_segment(job_id, request.markdown, segment, reasoning_llm, json_llm, schema)
                 segments.append(ret[0])
                 sub_outline = ret[1]
             else:
+                # Complex content generation using 405B
                 prompt = SEGMENT_TRANSCRIPT_PROMPT.render(
                     text=request.markdown,
                     duration=segment["duration"],
@@ -117,9 +132,9 @@ def process_transcription(job_id: str, request: TranscriptionRequest):
                     angles="\n".join(segment["descriptions"])
                 )
                 messages = [{"role": "user", "content": prompt}]
-                segments.append(retry_nim_request(llm, messages, sync=False))
+                segments.append(retry_nim_request(reasoning_llm, messages, sync=False))
 
-        # Process dialogue
+        # Process dialogue using 405B (complex content generation)
         segment_transcripts = []
         for idx, segment in enumerate(outline_json["segments"]):
             job_manager.update_status(
@@ -135,20 +150,20 @@ def process_transcription(job_id: str, request: TranscriptionRequest):
                 speaker_2_name=request.speaker_2_name
             )
             messages = [{"role": "user", "content": prompt}]
-            segment_transcripts.append(retry_nim_request(llm, messages, sync=False))
+            segment_transcripts.append(retry_nim_request(reasoning_llm, messages, sync=False))
 
         # Combine transcripts
         job_manager.update_status(job_id, JobStatus.PROCESSING, "Combining segments")
         full_transcript = "\n".join([segment.get() for segment in segments])
         conversation = "\n".join([segment.get() for segment in segment_transcripts])
 
-        # Fuse outline
+        # Fuse outline using 405B (complex reasoning)
         job_manager.update_status(job_id, JobStatus.PROCESSING, "Fusing outline")
         prompt = FUSE_OUTLINE_PROMPT.render(overall_outline=outline, sub_outline=sub_outline)
         messages = [{"role": "user", "content": prompt}]
-        full_outline = retry_nim_request(llm, messages)
+        full_outline = retry_nim_request(reasoning_llm, messages)
 
-        # Revise dialogue
+        # Revise dialogue using 405B (complex content generation)
         job_manager.update_status(job_id, JobStatus.PROCESSING, "Revising dialogue")
         prompt = REVISE_PROMPT.render(
             raw_transcript=full_transcript,
@@ -156,9 +171,9 @@ def process_transcription(job_id: str, request: TranscriptionRequest):
             outline=full_outline,
         )
         messages = [{"role": "user", "content": prompt}]
-        conversation = retry_nim_request(llm, messages)
+        conversation = retry_nim_request(reasoning_llm, messages)
 
-        # Convert to JSON
+        # Convert to JSON using 70B
         schema = Conversation.model_json_schema()
         job_manager.update_status(job_id, JobStatus.PROCESSING, "Converting to final format")
         prompt = PODCAST_DIALOGUE_PROMPT.render(
@@ -168,10 +183,10 @@ def process_transcription(job_id: str, request: TranscriptionRequest):
             speaker_2_name=request.speaker_2_name,
         )
         messages = [{"role": "user", "content": prompt}]
-        final_conversation = retry_nim_request(llm, messages)
+        final_conversation = retry_nim_request(json_llm, messages, json_schema=schema)
         
         # Store result
-        result = json.loads(fa.utils.json_func.extract_json(final_conversation))
+        result = json.loads(final_conversation)
         job_manager.set_result(job_id, json.dumps(result).encode())
         job_manager.update_status(job_id, JobStatus.COMPLETED, "Transcription completed successfully")
 
@@ -180,26 +195,29 @@ def process_transcription(job_id: str, request: TranscriptionRequest):
         job_manager.update_status(job_id, JobStatus.FAILED, str(e))
         raise
 
-def deep_dive_segment(job_id: str, text: str, segment: Dict[str, str], llm):
+def deep_dive_segment(job_id: str, text: str, segment: Dict[str, str], reasoning_llm, json_llm, schema):
     status_msg = f"Performing deep dive analysis of segment: {segment['section']}"
     job_manager.update_status(job_id, JobStatus.PROCESSING, status_msg)
     logger.info(f"Job {job_id}: {status_msg}")
     
-    schema = PodcastOutline.model_json_schema()
+    # Complex reasoning using 405B
     prompt = DEEP_DIVE_PROMPT.render(
         text=text,
         topic=segment["descriptions"],
         duration=segment["duration"]
     )
     messages = [{"role": "user", "content": prompt}]
-    outline = retry_nim_request(llm, messages)
+    outline = retry_nim_request(reasoning_llm, messages)
 
+    # JSON formatting using 70B
     prompt = OUTLINE_PROMPT.render(
         text=outline,
         schema=json.dumps(schema, indent=2)
     )
     messages = [{"role": "user", "content": prompt}]
-    outline_json = json.loads(fa.utils.json_func.extract_json(retry_nim_request(llm, messages)))
+    outline_json = json.loads(
+        retry_nim_request(json_llm, messages, json_schema=schema)
+    )
     
     segments = []
     for subsegment in outline_json["segments"]:
@@ -215,7 +233,7 @@ def deep_dive_segment(job_id: str, text: str, segment: Dict[str, str], llm):
             angles="\n".join(subsegment["descriptions"])
         )
         messages = [{"role": "user", "content": prompt}]
-        segments.append(retry_nim_request(llm, messages, sync=False))
+        segments.append(retry_nim_request(reasoning_llm, messages, sync=False))
     
     texts = [segment.get() for segment in segments]
     return (Value("\n".join(texts)), outline_json)

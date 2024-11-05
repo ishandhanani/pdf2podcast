@@ -8,7 +8,6 @@ Come up the structure of the podcast.
 {{ text }}
                                      
 Innovation should be the focus of the podcast, and the most important part of the podcast, with enough details.
-                          
 """)
 
 OUTLINE_PROMPT = jinja2.Template("""
@@ -16,10 +15,8 @@ Given the free form outline, convert in into a structured outline without losing
 
 {{ text }}
                                                            
-The result must conform to the following JSON schema:\n```json\n{{ schema }}\n```\n\n
-Provide the result enclosed in triple backticks with 'json' on the first line.                            
+The result must conform to the following JSON schema:\n{{ schema }}\n\n
 """)
-
 
 SEGMENT_TRANSCRIPT_PROMPT = jinja2.Template("""
 Make a transcript given the text:
@@ -36,9 +33,7 @@ Provide context and background information throughout
 Make sure the details, numbers are accurate and comprehensive
                                             
 Dive deep into each topic, and provide enough details given the time budget, don't leave any stone unturned.
-                                         
 """)
-
 
 DEEP_DIVE_PROMPT = jinja2.Template("""
 You will be given some content, short ideas or thoughts about the content.
@@ -49,8 +44,6 @@ Here is the content
 
 {{text}}
                                    
-
-
 The topic will be around
                                    
 {{topic}}
@@ -75,9 +68,6 @@ Time budget: {{ duration }} minutes, approximately {{ (duration * 180) | int }} 
                                     
 Only return the full transcript, no need to include any other information like time budget or segment name.
 """)
-
-
-
 
 RAW_PODCAST_DIALOGUE_PROMPT_v2 = jinja2.Template("""
 Your task is to transform the provided input transcript into a lively, engaging, and informative podcast dialogue. 
@@ -116,9 +106,7 @@ Here is the transcript:
                                           
 Only return the full dialogue transcript, no need to include any other information like time budget or segment name.
 Don't add introduction and ending to the dialogue unless it is provided in the transcript.
-                                                                  
 """)
-
 
 FUSE_OUTLINE_PROMPT = jinja2.Template("""
 You are given two outlines, one is overall outline, another is sub-outline for one section in the overall outline.
@@ -131,9 +119,7 @@ Sub-outline:
 {{ sub_outline }}
 
 Output the new outline with the tree structure.
-
 """)
-
 
 REVISE_PROMPT = jinja2.Template("""
 You are given a podcast dialogue transcript, and a raw transcript of the podcast.
@@ -141,7 +127,6 @@ You are only allowed to copy information from the raw dialogue transcript to mak
                                 
 Outline:
 {{ outline}}
-
 
 Here is the dialogue transcript:
 {{ dialogue_transcript }}
@@ -168,6 +153,5 @@ speaker-1's name is {{ speaker_1_name }}, and speaker-2's name is {{ speaker_2_n
 Here is the original transcript:
 {{ text }}
                                           
-The result must conform to the following JSON schema:\n```json\n{{ schema }}\n```\n\n
-Provide the result enclosed in triple backticks with 'json' on the first line.
+The result must conform to the following JSON schema:\n{{ schema }}\n\n
 """)

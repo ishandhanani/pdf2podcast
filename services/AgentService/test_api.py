@@ -13,7 +13,7 @@ def test_transcribe_api():
     # Prepare the payload
     payload = {
         "markdown": markdown_content,
-        "duration": 20,
+        "duration": 5,
         "speaker_1_name": "Kate",
         "speaker_2_name": "Bob",
         "model": "meta/llama-3.1-405b-instruct",
