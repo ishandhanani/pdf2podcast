@@ -16,7 +16,8 @@ RUN pip install --no-cache-dir \
     pydantic \
     redis \
     websockets \
-    asyncio
+    asyncio \
+    minio
 
 # Copy shared package first
 COPY shared /shared

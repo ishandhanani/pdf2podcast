@@ -5,26 +5,28 @@ import flexagent as fa
 from flexagent.backend import BackendConfig
 from flexagent.engine import Value
 from pydantic import BaseModel
-from typing import List, Literal, Dict
+from pathlib import Path
+from dataclasses import dataclass
+from typing import List, Literal, Dict, Optional, Any
 import json
 import os
 import logging
+import time
 from prompts import (
     RAW_OUTLINE_PROMPT,
     OUTLINE_PROMPT,
     SEGMENT_TRANSCRIPT_PROMPT,
     DEEP_DIVE_PROMPT,
-    TRANSCRIPT_PROMPT,
     RAW_PODCAST_DIALOGUE_PROMPT_v2,
     FUSE_OUTLINE_PROMPT,
     REVISE_PROMPT,
     PODCAST_DIALOGUE_PROMPT
 )
-import time
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Data Models
 class DialogueEntry(BaseModel):
     text: str
     speaker: Literal["speaker-1", "speaker-2"]
@@ -50,60 +52,123 @@ class TranscriptionRequest(BaseModel):
     model: str = "meta/llama-3.1-405b-instruct"
     job_id: str
 
+@dataclass
+class ModelConfig:
+    name: str
+    api_base: str
+    backend_type: str = "nim"
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "ModelConfig":
+        return cls(
+            name=data["name"],
+            api_base=data["api_base"],
+            backend_type=data.get("backend_type", "nim")
+        )
+
+class LLMManager:
+    DEFAULT_CONFIGS = {
+        "reasoning": {
+            "name": "meta/llama-3.1-405b-instruct",
+            "api_base": "https://integrate.api.nvidia.com/v1",
+            "backend_type": "nim"
+        },
+        "json": {
+            "name": "meta/llama-3.1-70b-instruct",
+            "api_base": "https://nim-pc8kmx5ae.brevlab.com/v1",
+            "backend_type": "nim"
+        }
+    }
+
+    def __init__(self, api_key: str, config_path: Optional[str] = None):
+        self.api_key = api_key
+        self._llm_cache: Dict[str, fa.ops.LLM] = {}
+        self.model_configs = self._load_configurations(config_path)
+
+    def _load_configurations(self, config_path: Optional[str]) -> Dict[str, ModelConfig]:
+        """Load model configurations from JSON file if provided, otherwise use defaults"""
+        configs = self.DEFAULT_CONFIGS.copy()
+
+        if config_path:
+            try:
+                config_path = Path(config_path)
+                if config_path.exists():
+                    with config_path.open() as f:
+                        custom_configs = json.load(f)
+                    configs.update(custom_configs)
+                    logger.info(f"Loaded custom model configurations from {config_path}")
+                else:
+                    logger.warning(f"Config file {config_path} not found, using default configurations")
+            except Exception as e:
+                logger.error(f"Error loading config file: {e}")
+                logger.warning("Using default configurations")
+
+        return {
+            key: ModelConfig.from_dict(config)
+            for key, config in configs.items()
+        }
+
+    def get_llm(self, model_key: str) -> fa.ops.LLM:
+        """Get or create an LLM instance for the specified model key"""
+        if model_key not in self.model_configs:
+            raise ValueError(f"Unknown model key: {model_key}")
+            
+        if model_key not in self._llm_cache:
+            config = self.model_configs[model_key]
+            backend = BackendConfig(
+                backend_type=config.backend_type,
+                model_name=config.name,
+                api_key=self.api_key,
+                api_base=config.api_base
+            )
+            self._llm_cache[model_key] = fa.ops.LLM().to(backend)
+            
+        return self._llm_cache[model_key]
+    
+    def query(
+        self,
+        model_key: str,
+        messages: List[Dict[str, str]],
+        json_schema: Optional[Dict] = None,
+        sync: bool = True,
+        retries: int = 5
+    ) -> Any:
+        """Send a query to the specified model with retry logic"""
+        llm = self.get_llm(model_key)
+        
+        for attempt in range(retries):
+            try:
+                extra_body = {"nvext": {"guided_json": json_schema}} if json_schema else None
+                response = llm(messages, extra_body=extra_body)
+                return response.get() if sync else response
+                
+            except Exception as e:
+                logger.error(f"Attempt {attempt + 1}/{retries} failed: {str(e)}")
+                if attempt == retries - 1:
+                    raise Exception(f"Failed to get response after {retries} attempts") from e
+                time.sleep(3)
+
+# FastAPI Application
 app = FastAPI(debug=True)
 job_manager = JobStatusManager(ServiceType.AGENT)
 
-def get_llm(model_name: str, backend_type: str = "nim"):
-    # Use hardcoded base URL for 70B model, API_BASE env var for 405B
-    api_base = "https://nim-pc8kmx5ae.brevlab.com/v1" if model_name == "meta/llama-3.1-70b-instruct" else os.getenv("API_BASE")
-    
-    backend = BackendConfig(
-        backend_type=backend_type,
-        model_name=model_name,
-        api_key=os.getenv("NIM_KEY"),
-        api_base=api_base
-    )
-    return fa.ops.LLM().to(backend)
-
-def retry_nim_request(llm, messages, retries=5, sync=True, json_schema=None):
-    for _ in range(retries):
-        try:
-            extra_body = None
-            if json_schema:
-                extra_body = {
-                    "nvext": {
-                        "guided_json": json_schema
-                    }
-                }
-            if sync:
-                return llm(messages, extra_body=extra_body).get()
-            else:
-                return llm(messages, extra_body=extra_body)
-        except Exception as e:
-            logger.error(f"Failed to get response: {e}")
-            time.sleep(3)
-    raise Exception("Failed to get response")
-
 def process_transcription(job_id: str, request: TranscriptionRequest):
     try:
-        # Initialize LLMs
-        job_manager.update_status(job_id, JobStatus.PROCESSING, "Initializing LLMs")
-        reasoning_llm = get_llm(request.model)
-        json_llm = get_llm("meta/llama-3.1-70b-instruct")
-        
+        llm_manager = LLMManager(api_key=os.getenv("NIM_KEY"))
+
+        # Initialize processing
+        job_manager.update_status(job_id, JobStatus.PROCESSING, "Initializing processing")
         schema = PodcastOutline.model_json_schema()
 
-        # Get raw outline using 405B (complex reasoning)
+        # Generate initial outline
         job_manager.update_status(job_id, JobStatus.PROCESSING, "Generating initial outline")
         prompt = RAW_OUTLINE_PROMPT.render(text=request.markdown, duration=request.duration)
-        messages = [{"role": "user", "content": prompt}]
-        raw_outline = retry_nim_request(reasoning_llm, messages)
+        raw_outline = llm_manager.query("reasoning", [{"role": "user", "content": prompt}])
 
-        # Process outline using 70B (JSON formatting)
+        # Convert to structured format
         job_manager.update_status(job_id, JobStatus.PROCESSING, "Converting raw outline to structured format")
         prompt = OUTLINE_PROMPT.render(text=raw_outline, schema=json.dumps(schema, indent=2))
-        messages = [{"role": "user", "content": prompt}]
-        outline = retry_nim_request(json_llm, messages, json_schema=schema)
+        outline = llm_manager.query("json", [{"role": "user", "content": prompt}], json_schema=schema)
         outline_json = json.loads(outline)
         
         # Process segments
@@ -120,21 +185,21 @@ def process_transcription(job_id: str, request: TranscriptionRequest):
             )
             
             if idx == longest_segment_idx:
-                ret = deep_dive_segment(job_id, request.markdown, segment, reasoning_llm, json_llm, schema)
+                ret = deep_dive_segment(job_id, request.markdown, segment, llm_manager, schema)
                 segments.append(ret[0])
                 sub_outline = ret[1]
             else:
-                # Complex content generation using 405B
                 prompt = SEGMENT_TRANSCRIPT_PROMPT.render(
                     text=request.markdown,
                     duration=segment["duration"],
                     topic=segment["section"],
                     angles="\n".join(segment["descriptions"])
                 )
-                messages = [{"role": "user", "content": prompt}]
-                segments.append(retry_nim_request(reasoning_llm, messages, sync=False))
+                segments.append(
+                    llm_manager.query("reasoning", [{"role": "user", "content": prompt}], sync=False)
+                )
 
-        # Process dialogue using 405B (complex content generation)
+        # Generate dialogue
         segment_transcripts = []
         for idx, segment in enumerate(outline_json["segments"]):
             job_manager.update_status(
@@ -149,31 +214,30 @@ def process_transcription(job_id: str, request: TranscriptionRequest):
                 speaker_1_name=request.speaker_1_name,
                 speaker_2_name=request.speaker_2_name
             )
-            messages = [{"role": "user", "content": prompt}]
-            segment_transcripts.append(retry_nim_request(reasoning_llm, messages, sync=False))
+            segment_transcripts.append(
+                llm_manager.query("reasoning", [{"role": "user", "content": prompt}], sync=False)
+            )
 
         # Combine transcripts
         job_manager.update_status(job_id, JobStatus.PROCESSING, "Combining segments")
         full_transcript = "\n".join([segment.get() for segment in segments])
         conversation = "\n".join([segment.get() for segment in segment_transcripts])
 
-        # Fuse outline using 405B (complex reasoning)
+        # Fuse outline
         job_manager.update_status(job_id, JobStatus.PROCESSING, "Fusing outline")
         prompt = FUSE_OUTLINE_PROMPT.render(overall_outline=outline, sub_outline=sub_outline)
-        messages = [{"role": "user", "content": prompt}]
-        full_outline = retry_nim_request(reasoning_llm, messages)
+        full_outline = llm_manager.query("reasoning", [{"role": "user", "content": prompt}])
 
-        # Revise dialogue using 405B (complex content generation)
+        # Revise dialogue
         job_manager.update_status(job_id, JobStatus.PROCESSING, "Revising dialogue")
         prompt = REVISE_PROMPT.render(
             raw_transcript=full_transcript,
             dialogue_transcript=conversation,
             outline=full_outline,
         )
-        messages = [{"role": "user", "content": prompt}]
-        conversation = retry_nim_request(reasoning_llm, messages)
+        conversation = llm_manager.query("reasoning", [{"role": "user", "content": prompt}])
 
-        # Convert to JSON using 70B
+        # Convert to final JSON format
         schema = Conversation.model_json_schema()
         job_manager.update_status(job_id, JobStatus.PROCESSING, "Converting to final format")
         prompt = PODCAST_DIALOGUE_PROMPT.render(
@@ -182,8 +246,11 @@ def process_transcription(job_id: str, request: TranscriptionRequest):
             speaker_1_name=request.speaker_1_name,
             speaker_2_name=request.speaker_2_name,
         )
-        messages = [{"role": "user", "content": prompt}]
-        final_conversation = retry_nim_request(json_llm, messages, json_schema=schema)
+        final_conversation = llm_manager.query(
+            "json", 
+            [{"role": "user", "content": prompt}], 
+            json_schema=schema
+        )
         
         # Store result
         result = json.loads(final_conversation)
@@ -195,30 +262,35 @@ def process_transcription(job_id: str, request: TranscriptionRequest):
         job_manager.update_status(job_id, JobStatus.FAILED, str(e))
         raise
 
-def deep_dive_segment(job_id: str, text: str, segment: Dict[str, str], reasoning_llm, json_llm, schema):
+def deep_dive_segment(
+    job_id: str, 
+    text: str, 
+    segment: Dict[str, str], 
+    llm_manager: LLMManager,
+    schema: Dict
+) -> tuple[Value, Dict]:
     status_msg = f"Performing deep dive analysis of segment: {segment['section']}"
     job_manager.update_status(job_id, JobStatus.PROCESSING, status_msg)
     logger.info(f"Job {job_id}: {status_msg}")
     
-    # Complex reasoning using 405B
+    # Generate detailed outline
     prompt = DEEP_DIVE_PROMPT.render(
         text=text,
         topic=segment["descriptions"],
         duration=segment["duration"]
     )
-    messages = [{"role": "user", "content": prompt}]
-    outline = retry_nim_request(reasoning_llm, messages)
+    outline = llm_manager.query("reasoning", [{"role": "user", "content": prompt}])
 
-    # JSON formatting using 70B
+    # Convert to structured format
     prompt = OUTLINE_PROMPT.render(
         text=outline,
         schema=json.dumps(schema, indent=2)
     )
-    messages = [{"role": "user", "content": prompt}]
     outline_json = json.loads(
-        retry_nim_request(json_llm, messages, json_schema=schema)
+        llm_manager.query("json", [{"role": "user", "content": prompt}], json_schema=schema)
     )
     
+    # Process subsegments
     segments = []
     for subsegment in outline_json["segments"]:
         job_manager.update_status(
@@ -232,12 +304,14 @@ def deep_dive_segment(job_id: str, text: str, segment: Dict[str, str], reasoning
             topic=subsegment["section"],
             angles="\n".join(subsegment["descriptions"])
         )
-        messages = [{"role": "user", "content": prompt}]
-        segments.append(retry_nim_request(reasoning_llm, messages, sync=False))
+        segments.append(
+            llm_manager.query("reasoning", [{"role": "user", "content": prompt}], sync=False)
+        )
     
     texts = [segment.get() for segment in segments]
     return (Value("\n".join(texts)), outline_json)
 
+# API Endpoints
 @app.post("/transcribe", status_code=202)
 def transcribe(request: TranscriptionRequest, background_tasks: BackgroundTasks):
     job_manager.create_job(request.job_id)
@@ -253,7 +327,7 @@ def get_output(job_id: str):
     result = job_manager.get_result(job_id)
     if result is None:
         raise HTTPException(status_code=404, detail="Result not found")
-    return json.loads(result.decode())  # Decode bytes to string before JSON parsing
+    return json.loads(result.decode())
 
 @app.get("/transcribe/health")
 def health():
