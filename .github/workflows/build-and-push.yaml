@@ -1,0 +1,75 @@
+name: Build and Push Services
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Get version from tag
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_ENV
+
+      - name: Login to Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: nvcr.io
+          username: ${{ secrets.NVCR_USERNAME }}
+          password: ${{ secrets.NVCR_TOKEN }}
+
+      - name: Build and push api-service
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: services/APIService/Dockerfile
+          push: true
+          tags: nvcr.io/pfteb4cqjzrs/playground/api-service:${{ env.VERSION }}
+
+      - name: Build and push agent-service
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: services/AgentService/Dockerfile
+          push: true
+          tags: nvcr.io/pfteb4cqjzrs/playground/agent-service:${{ env.VERSION }}
+
+      - name: Build and push pdf-service
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: services/PDFService/Dockerfile
+          push: true
+          tags: nvcr.io/pfteb4cqjzrs/playground/pdf-service:${{ env.VERSION }}
+
+      - name: Build and push tts-service
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: services/TTSService/Dockerfile
+          push: true
+          tags: nvcr.io/pfteb4cqjzrs/playground/tts-service:${{ env.VERSION }}
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: Release ${{ env.VERSION }}
+          body: |
+            Release version ${{ env.VERSION }}
+
+            Images pushed to registry:
+            - nvcr.io/pfteb4cqjzrs/playground/api-service:${{ env.VERSION }}
+            - nvcr.io/pfteb4cqjzrs/playground/agent-service:${{ env.VERSION }}
+            - nvcr.io/pfteb4cqjzrs/playground/pdf-service:${{ env.VERSION }}
+            - nvcr.io/pfteb4cqjzrs/playground/tts-service:${{ env.VERSION }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

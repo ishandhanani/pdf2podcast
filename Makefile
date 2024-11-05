@@ -1,3 +1,12 @@
+# Version for production deployment
+VERSION := 1.1
+
+# Docker registry and project
+REGISTRY := nvcr.io/pfteb4cqjzrs/playground
+
+# List of services to build
+SERVICES := api-service agent-service pdf-service tts-service
+
 # Required environment variables
 REQUIRED_ENV_VARS := ELEVENLABS_API_KEY NIM_KEY MAX_CONCURRENT_REQUESTS
 
@@ -27,6 +36,24 @@ dev: check_env
 	@echo "$(GREEN)Starting development environment...$(NC)"
 	docker compose -f docker-compose.yaml up --build
 
+# Production target
+prod: check_env
+	@echo "$(GREEN)Starting production environment with version $(VERSION)...$(NC)"
+	VERSION=$(VERSION) docker compose -f docker-compose.yaml up -d
+
+# Version bump and release target
+version-bump:
+	@echo "Current version: $(VERSION)"
+	@new_version=$$(echo $(VERSION) | awk -F. '{$$NF = $$NF + 1;} 1' | sed 's/ /./g'); \
+	sed -i.bak "s/VERSION := .*/VERSION := $$new_version/" Makefile; \
+	rm Makefile.bak; \
+	echo "$(GREEN)Version bumped to: $$new_version$(NC)"; \
+	git add Makefile; \
+	git commit -m "chore: bump version to $$new_version"; \
+	git tag -a "v$$new_version" -m "Release v$$new_version"; \
+	git push origin main; \
+	git push origin "v$$new_version"
+
 # Clean up containers and volumes
 clean:
 	docker compose -f docker-compose.yaml down -v
@@ -39,4 +66,4 @@ format:
 
 ruff: lint format
 
-.PHONY: check_env dev clean ruff
+.PHONY: check_env dev clean ruff prod version-bump
