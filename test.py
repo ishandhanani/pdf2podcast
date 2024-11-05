@@ -149,7 +149,7 @@ def test_api(base_url: str):
     if not os.path.exists(samples_dir):
         raise FileNotFoundError(f"Samples directory not found at {samples_dir}")
 
-    sample_pdf_path = os.path.join(samples_dir, "travis-test.pdf")
+    sample_pdf_path = os.path.join(samples_dir, "PNP_Proof.pdf")
     
     # Ensure the sample PDF file exists
     assert os.path.exists(sample_pdf_path), f"Sample PDF file not found at {sample_pdf_path}"

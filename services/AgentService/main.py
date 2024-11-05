@@ -96,7 +96,6 @@ class LLMManager:
                     with config_path.open() as f:
                         custom_configs = json.load(f)
                     configs.update(custom_configs)
-                    logger.info(f"Loaded custom model configurations from {config_path}")
                 else:
                     logger.warning(f"Config file {config_path} not found, using default configurations")
             except Exception as e:
@@ -154,8 +153,10 @@ job_manager = JobStatusManager(ServiceType.AGENT)
 
 def process_transcription(job_id: str, request: TranscriptionRequest):
     try:
-        llm_manager = LLMManager(api_key=os.getenv("NIM_KEY"))
-
+        llm_manager = LLMManager(
+            api_key=os.getenv("NIM_KEY"),
+            config_path=os.getenv("MODEL_CONFIG_PATH") # Add this line
+        )
         # Initialize processing
         job_manager.update_status(job_id, JobStatus.PROCESSING, "Initializing processing")
         schema = PodcastOutline.model_json_schema()

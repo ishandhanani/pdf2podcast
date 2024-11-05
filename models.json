@@ -5,7 +5,7 @@
       "backend_type": "nim"
     },
     "json": {
-      "name": "meta/llama-3.1-70b-instruct",
+      "name": "meta/llama-3.1-8b-instruct",
       "api_base": "https://nim-pc8kmx5ae.brevlab.com/v1",
       "backend_type": "nim"
     }
