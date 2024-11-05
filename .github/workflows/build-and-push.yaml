@@ -58,18 +58,3 @@ jobs:
           file: services/TTSService/Dockerfile
           push: true
           tags: nvcr.io/pfteb4cqjzrs/playground/tts-service:${{ env.VERSION }}
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          name: Release ${{ env.VERSION }}
-          body: |
-            Release version ${{ env.VERSION }}
-
-            Images pushed to registry:
-            - nvcr.io/pfteb4cqjzrs/playground/api-service:${{ env.VERSION }}
-            - nvcr.io/pfteb4cqjzrs/playground/agent-service:${{ env.VERSION }}
-            - nvcr.io/pfteb4cqjzrs/playground/pdf-service:${{ env.VERSION }}
-            - nvcr.io/pfteb4cqjzrs/playground/tts-service:${{ env.VERSION }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
