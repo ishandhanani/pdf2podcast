@@ -54,7 +54,7 @@ services:
     ports:
       - "8964:8964"
     environment:
-      - API_BASE=${API_BASE:-http://0.0.0.0:8000/v1}
+      - API_BASE=${API_BASE:-https://nim-pc8kmx5ae.brevlab.com/v1}
       - NIM_KEY=${NIM_KEY}
       - REDIS_URL=redis://redis:6379
     depends_on:
@@ -70,7 +70,7 @@ services:
       - "8003:8003"
     environment:
       - REDIS_URL=redis://redis:6379
-      - MODEL_API_URL=${MODEL_API_URL}
+      - MODEL_API_URL=${MODEL_API_URL:-https://pdf-gyrdps568.brevlab.com}
     depends_on:
       - redis
     networks:
