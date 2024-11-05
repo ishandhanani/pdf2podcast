@@ -14,6 +14,8 @@ from shared.shared_types import (
     JobStatus,
     StatusUpdate,
     TranscriptionParams,
+    SavedPodcast,
+    SavedPodcastWithAudio,
 )
 from shared.connection import ConnectionManager
 from shared.storage import StorageManager
@@ -26,6 +28,7 @@ import os
 import logging
 import time
 import asyncio
+from typing import Dict, List
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -284,3 +287,67 @@ async def cleanup_jobs():
             redis_client.delete(f"result:{job_id}:{service}")
             removed += 1
     return {"message": f"Removed {removed} old jobs"}
+
+
+@app.get("/saved_podcasts", response_model=Dict[str, List[SavedPodcast]])
+async def get_saved_podcasts():
+    """Get a list of all saved podcasts from storage with their audio data"""
+    try:
+        saved_files = storage_manager.list_files_metadata()
+        return {
+            "podcasts": [
+                SavedPodcast(
+                    job_id=file["job_id"],
+                    filename=file["filename"],
+                    created_at=file["created_at"],
+                    size=file["size"],
+                    transcription_params=file.get("transcription_params", {}),
+                )
+                for file in saved_files
+            ]
+        }
+    except Exception as e:
+        logger.error(f"Failed to list saved podcasts: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to retrieve saved podcasts: {str(e)}"
+        )
+
+
+@app.get("/saved_podcast/{job_id}", response_model=SavedPodcastWithAudio)
+async def get_saved_podcast(job_id: str):
+    """Get a specific saved podcast with its audio data"""
+    try:
+        # Get metadata first
+        saved_files = storage_manager.list_files_metadata()
+        podcast_metadata = next(
+            (file for file in saved_files if file["job_id"] == job_id), None
+        )
+
+        if not podcast_metadata:
+            raise HTTPException(
+                status_code=404, detail=f"Podcast with job_id {job_id} not found"
+            )
+
+        # Get audio data
+        audio_data = storage_manager.get_podcast_audio(job_id)
+        if not audio_data:
+            raise HTTPException(
+                status_code=404, detail=f"Audio data for podcast {job_id} not found"
+            )
+
+        return SavedPodcastWithAudio(
+            job_id=podcast_metadata["job_id"],
+            filename=podcast_metadata["filename"],
+            created_at=podcast_metadata["created_at"],
+            size=podcast_metadata["size"],
+            transcription_params=podcast_metadata.get("transcription_params", {}),
+            audio_data=audio_data,
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get podcast {job_id}: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to retrieve podcast: {str(e)}"
+        )

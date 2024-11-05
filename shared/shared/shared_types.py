@@ -45,3 +45,15 @@ class TranscriptionParams(BaseModel):
             "speaker-2": "9BWtsMINqrJLrRacOk9x",
         },
     )
+
+
+class SavedPodcast(BaseModel):
+    job_id: str
+    filename: str
+    created_at: str
+    size: int
+    transcription_params: Optional[Dict] = {}
+
+
+class SavedPodcastWithAudio(SavedPodcast):
+    audio_data: str
