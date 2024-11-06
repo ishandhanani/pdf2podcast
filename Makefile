@@ -45,7 +45,7 @@ prod: check_env
 version-bump:
 	@echo "Current version: $(VERSION)"
 	@new_version=$$(echo $(VERSION) | awk -F. '{$$NF = $$NF + 1;} 1' | sed 's/ /./g'); \
-	sed -i.bak "s/VERSION := 1.2
+	sed -i.bak "s/VERSION := $(VERSION)/VERSION := $$new_version/" Makefile; \
 	rm Makefile.bak; \
 	echo "$(GREEN)Version bumped to: $$new_version$(NC)"; \
 	git add Makefile; \
