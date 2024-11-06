@@ -39,7 +39,7 @@ dev: check_env
 # Production target
 prod: check_env
 	@echo "$(GREEN)Starting production environment with version $(VERSION)...$(NC)"
-	VERSION=$(VERSION) docker compose -f docker-compose.yaml up -d
+	VERSION=$(VERSION) docker compose -f docker-compose-remote.yaml --env-file .env up
 
 # Version bump and release target
 version-bump:
@@ -61,7 +61,7 @@ clean:
 lint:
 	ruff check
 
-format: 
+format:
 	ruff format
 
 ruff: lint format
