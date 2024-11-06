@@ -3,7 +3,7 @@ include .env
 export
 
 # Version for production deployment
-VERSION := 1.3
+VERSION := 1.4
 
 # Docker registry and project
 REGISTRY := nvcr.io/pfteb4cqjzrs/playground
