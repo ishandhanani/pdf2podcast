@@ -1,5 +1,5 @@
 # Version for production deployment
-VERSION := 1.2
+VERSION := 1.3
 
 # Docker registry and project
 REGISTRY := nvcr.io/pfteb4cqjzrs/playground
