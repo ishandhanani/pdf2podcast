@@ -6,55 +6,104 @@ on:
       - "v*.*"
 
 jobs:
-  build-and-push:
+  # Common setup job to get version
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.get_version.outputs.version }}
+    steps:
+      - name: Get version from tag
+        id: get_version
+        run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+  api-service:
+    needs: setup
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
-
-      - name: Get version from tag
-        id: get_version
-        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_ENV
-
       - name: Login to Container Registry
         uses: docker/login-action@v3
         with:
           registry: nvcr.io
           username: ${{ secrets.NVCR_USERNAME }}
           password: ${{ secrets.NVCR_TOKEN }}
-
       - name: Build and push api-service
         uses: docker/build-push-action@v6
         with:
           context: .
           file: services/APIService/Dockerfile
           push: true
-          tags: nvcr.io/pfteb4cqjzrs/playground/api-service:${{ env.VERSION }}
+          tags: nvcr.io/pfteb4cqjzrs/playground/api-service:${{ needs.setup.outputs.version }}
 
+  agent-service:
+    needs: setup
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      - name: Login to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: nvcr.io
+          username: ${{ secrets.NVCR_USERNAME }}
+          password: ${{ secrets.NVCR_TOKEN }}
       - name: Build and push agent-service
         uses: docker/build-push-action@v6
         with:
           context: .
           file: services/AgentService/Dockerfile
           push: true
-          tags: nvcr.io/pfteb4cqjzrs/playground/agent-service:${{ env.VERSION }}
+          tags: nvcr.io/pfteb4cqjzrs/playground/agent-service:${{ needs.setup.outputs.version }}
 
+  pdf-service:
+    needs: setup
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      - name: Login to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: nvcr.io
+          username: ${{ secrets.NVCR_USERNAME }}
+          password: ${{ secrets.NVCR_TOKEN }}
       - name: Build and push pdf-service
         uses: docker/build-push-action@v6
         with:
           context: .
           file: services/PDFService/Dockerfile
           push: true
-          tags: nvcr.io/pfteb4cqjzrs/playground/pdf-service:${{ env.VERSION }}
+          tags: nvcr.io/pfteb4cqjzrs/playground/pdf-service:${{ needs.setup.outputs.version }}
 
+  tts-service:
+    needs: setup
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      - name: Login to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: nvcr.io
+          username: ${{ secrets.NVCR_USERNAME }}
+          password: ${{ secrets.NVCR_TOKEN }}
       - name: Build and push tts-service
         uses: docker/build-push-action@v6
         with:
           context: .
           file: services/TTSService/Dockerfile
           push: true
-          tags: nvcr.io/pfteb4cqjzrs/playground/tts-service:${{ env.VERSION }}
+          tags: nvcr.io/pfteb4cqjzrs/playground/tts-service:${{ needs.setup.outputs.version }}
