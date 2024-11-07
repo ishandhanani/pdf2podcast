@@ -1,5 +1,5 @@
 from fastapi import FastAPI, BackgroundTasks, HTTPException
-from shared.shared_types import ServiceType, JobStatus
+from shared.shared_types import ServiceType, JobStatus, Conversation
 from shared.storage import StorageManager
 from shared.job import JobStatusManager
 import flexagent as fa
@@ -8,7 +8,7 @@ from flexagent.engine import Value
 from pydantic import BaseModel
 from pathlib import Path
 from dataclasses import dataclass
-from typing import List, Literal, Dict, Optional, Any
+from typing import List, Dict, Optional, Any
 import json
 import os
 import logging
@@ -29,14 +29,6 @@ logger = logging.getLogger(__name__)
 
 
 # Data Models
-class DialogueEntry(BaseModel):
-    text: str
-    speaker: Literal["speaker-1", "speaker-2"]
-
-
-class Conversation(BaseModel):
-    scratchpad: str
-    dialogue: List[DialogueEntry]
 
 
 class PodcastSegment(BaseModel):
@@ -188,7 +180,7 @@ class PromptTracker:
     def save(self, storage_manager: StorageManager):
         storage_manager.store_file(
             self.job_id,
-            json.dumps(self.steps).encode(),
+            json.dumps({"steps": self.steps}).encode(),
             f"{self.job_id}_prompt_tracker.json",
             "application/json",
         )

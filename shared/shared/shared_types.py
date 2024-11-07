@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Optional, Dict
+from typing import Optional, Dict, List, Literal
 from enum import Enum
 
 
@@ -58,3 +58,27 @@ class SavedPodcast(BaseModel):
 
 class SavedPodcastWithAudio(SavedPodcast):
     audio_data: str
+
+
+# Transcript schema
+class DialogueEntry(BaseModel):
+    text: str
+    speaker: Literal["speaker-1", "speaker-2"]
+
+
+class Conversation(BaseModel):
+    scratchpad: str
+    dialogue: List[DialogueEntry]
+
+
+# Prompt tracker schema
+class ProcessingStep(BaseModel):
+    step_name: str
+    prompt: str
+    response: str
+    model: str
+    timestamp: float
+
+
+class PromptTracker(BaseModel):
+    steps: List[ProcessingStep]
