@@ -43,6 +43,7 @@ dev: check_env
 
 # Production target
 prod: check_env
+	docker compose down
 	@echo "$(GREEN)Starting production environment with version $(VERSION)...$(NC)"
 	VERSION=$(VERSION) docker compose -f docker-compose-remote.yaml --env-file .env up
 
