@@ -526,4 +526,65 @@ async def delete_saved_podcast(job_id: str):
 
 @app.get("/health")
 async def health():
-    return {"status": "healthy"}
+    """Health check endpoint with OpenTelemetry instrumentation"""
+    with telemetry.tracer.start_as_current_span("health_check") as span:
+        try:
+            logger.info("Starting health check with tracing")
+            span.set_attribute("component", "api-service")
+
+            # Check Redis connection
+            with telemetry.tracer.start_as_current_span("redis_check") as redis_span:
+                logger.info("Checking Redis connection")
+                redis_span.set_attribute("component", "redis")
+                redis_alive = redis_client.ping()
+                redis_span.set_attribute("redis.status", "up" if redis_alive else "down")
+                logger.info(f"Redis status: {'up' if redis_alive else 'down'}")
+                
+            # Check dependent services
+            services = {
+                "pdf": PDF_SERVICE_URL,
+                "agent": AGENT_SERVICE_URL,
+                "tts": TTS_SERVICE_URL
+            }
+            
+            service_status = {}
+            for service_name, url in services.items():
+                with telemetry.tracer.start_as_current_span(f"{service_name}_check") as service_span:
+                    logger.info(f"Checking {service_name} service at {url}")
+                    service_span.set_attribute("component", service_name)
+                    try:
+                        response = requests.get(f"{url}/health", timeout=5)
+                        status = "up" if response.status_code == 200 else "down"
+                        service_span.set_attribute(f"{service_name}.status", status)
+                        service_span.set_attribute(f"{service_name}.response_code", response.status_code)
+                        service_status[service_name] = status
+                        logger.info(f"{service_name} status: {status}")
+                    except Exception as e:
+                        logger.error(f"Error checking {service_name}: {str(e)}")
+                        service_span.set_attribute(f"{service_name}.status", "down")
+                        service_span.set_attribute(f"{service_name}.error", str(e))
+                        service_span.record_exception(e)
+                        service_status[service_name] = "down"
+            
+            # Set overall health status
+            all_healthy = redis_alive and all(status == "up" for status in service_status.values())
+            span.set_attribute("health.status", "healthy" if all_healthy else "unhealthy")
+            logger.info(f"Overall health status: {'healthy' if all_healthy else 'unhealthy'}")
+            
+            return {
+                "status": "healthy" if all_healthy else "unhealthy",
+                "redis": "up" if redis_alive else "down",
+                "services": service_status,
+                "timestamp": time.time()
+            }
+            
+        except Exception as e:
+            logger.error(f"Health check failed: {str(e)}")
+            span.set_attribute("health.status", "unhealthy")
+            span.set_attribute("error", str(e))
+            span.record_exception(e)
+            return {
+                "status": "unhealthy",
+                "error": str(e),
+                "timestamp": time.time()
+            }
