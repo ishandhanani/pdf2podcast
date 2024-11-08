@@ -35,6 +35,11 @@ check_env:
 		fi \
 	done
 
+# UV environment setup target
+uv:
+	@echo "$(GREEN)Setting up UV environment...$(NC)"
+	@bash setup.sh
+
 # Development target
 dev: check_env
 	@if [ ! -d "data/minio" ]; then \
@@ -80,4 +85,4 @@ format:
 
 ruff: lint format
 
-.PHONY: check_env dev clean ruff prod version-bump
+.PHONY: check_env dev clean ruff prod version-bump uv
