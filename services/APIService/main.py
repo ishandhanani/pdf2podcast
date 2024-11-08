@@ -509,3 +509,11 @@ async def delete_saved_podcast(job_id: str):
         raise HTTPException(
             status_code=500, detail=f"Failed to delete podcast: {str(e)}"
         )
+
+
+@app.get("/health")
+def health():
+    return {
+        "status": "healthy",
+        "service": "api",
+    }
