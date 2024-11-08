@@ -93,6 +93,16 @@ services:
     networks:
       - app-network
 
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    ports:
+      - "16686:16686" # UI port
+      - "4317:4317" # OTLP gRPC port
+      - "4318:4318" # OTLP HTTP port
+      - "14250:14250" # Model/collector port
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+
 volumes:
   redis_data:
 

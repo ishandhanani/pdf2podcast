@@ -17,7 +17,13 @@ RUN pip install --no-cache-dir \
     redis \
     websockets \
     asyncio \
-    minio
+    minio \
+    opentelemetry-api \
+    opentelemetry-sdk \
+    opentelemetry-instrumentation-fastapi \
+    opentelemetry-instrumentation-requests \
+    opentelemetry-instrumentation-redis \
+    opentelemetry-exporter-otlp-proto-grpc
 
 # Copy shared package first
 COPY shared /shared

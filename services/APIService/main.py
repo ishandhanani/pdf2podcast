@@ -21,6 +21,7 @@ from shared.shared_types import (
 )
 from shared.connection import ConnectionManager
 from shared.storage import StorageManager
+from shared.otel import OpenTelemetryInstrumentation, OpenTelemetryConfig
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import ValidationError
 import redis
@@ -35,7 +36,20 @@ from typing import Dict, List
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Initialize FastAPI app
 app = FastAPI(debug=True)
+
+# Initialize OpenTelemetry
+telemetry = OpenTelemetryInstrumentation()
+config = OpenTelemetryConfig(
+    service_name="api-service",
+    otlp_endpoint=os.getenv("OTLP_ENDPOINT", "http://jaeger:4317"),
+    enable_redis=True,
+    enable_requests=True
+)
+telemetry.initialize(app, config)
+
+# Initialize other services
 redis_client = redis.Redis.from_url(
     os.getenv("REDIS_URL", "redis://redis:6379"), decode_responses=False
 )
@@ -510,10 +524,6 @@ async def delete_saved_podcast(job_id: str):
             status_code=500, detail=f"Failed to delete podcast: {str(e)}"
         )
 
-
 @app.get("/health")
-def health():
-    return {
-        "status": "healthy",
-        "service": "api",
-    }
+async def health():
+    return {"status": "healthy"}
