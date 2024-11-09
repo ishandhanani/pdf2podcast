@@ -87,7 +87,7 @@ jobs:
 
   pdf-model-api:
     needs: setup
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2204
     permissions:
       contents: read
       packages: write
@@ -110,7 +110,7 @@ jobs:
   
   pdf-model-worker:
     needs: setup
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2204
     permissions:
       contents: read
       packages: write

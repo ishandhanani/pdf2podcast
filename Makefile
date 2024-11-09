@@ -60,6 +60,15 @@ prod: check_env
 	@echo "$(GREEN)Starting production environment with version $(VERSION)...$(NC)"
 	VERSION=$(VERSION) docker compose -f docker-compose-remote.yaml --env-file .env up
 
+prod: check_env
+	@if [ ! -d "data/minio" ]; then \
+		echo "$(GREEN)Creating data/minio directory...$(NC)"; \
+		mkdir -p data/minio; \
+	fi
+	docker compose -f services/PDFService/PDFModelService/docker-compose-remote.yml down
+	@echo "$(GREEN)Starting production environment with version $(VERSION)...$(NC)"
+	VERSION=$(VERSION) docker compose -f services/PDFService/PDFModelService/docker-compose-remote.yml --env-file .env up
+
 # Version bump and release target
 version-bump:
 	@echo "Current version: $(VERSION)"
