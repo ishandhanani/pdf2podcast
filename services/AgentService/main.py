@@ -165,7 +165,7 @@ class LLMManager:
             span.set_attribute("retries", retries)
             for attempt in range(retries):
                 with telemetry.tracer.start_as_current_span(
-                    f"agent.query.{model_key}.inner"
+                    f"agent.query.{query_name}.inner"
                 ) as inner_span:
                     try:
                         extra_body = (
@@ -247,7 +247,7 @@ def process_transcription(job_id: str, request: TranscriptionRequest):
                 text=request.markdown, duration=request.duration
             )
             raw_outline = llm_manager.query(
-                "reasoning", [{"role": "user", "content": prompt}], "raw_outline"
+                "reasoning", [{"role": "user", "content": prompt}], "raw_outline",
             )
             prompt_tracker.track(
                 "raw_outline",
