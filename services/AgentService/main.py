@@ -159,7 +159,9 @@ class LLMManager:
     ) -> Any:
         """Send a query to the specified model with retry logic"""
         llm = self.get_llm(model_key)
-        with telemetry.tracer.start_as_current_span(f"agent.query.{query_name}") as span:
+        with telemetry.tracer.start_as_current_span(
+            f"agent.query.{query_name}"
+        ) as span:
             span.set_attribute("model_key", model_key)
             span.set_attribute("sync", sync)
             span.set_attribute("retries", retries)
@@ -247,7 +249,9 @@ def process_transcription(job_id: str, request: TranscriptionRequest):
                 text=request.markdown, duration=request.duration
             )
             raw_outline = llm_manager.query(
-                "reasoning", [{"role": "user", "content": prompt}], "raw_outline",
+                "reasoning",
+                [{"role": "user", "content": prompt}],
+                "raw_outline",
             )
             prompt_tracker.track(
                 "raw_outline",
@@ -266,7 +270,10 @@ def process_transcription(job_id: str, request: TranscriptionRequest):
                 text=raw_outline, schema=json.dumps(schema, indent=2)
             )
             outline = llm_manager.query(
-                "json", [{"role": "user", "content": prompt}], "outline", json_schema=schema
+                "json",
+                [{"role": "user", "content": prompt}],
+                "outline",
+                json_schema=schema,
             )
             prompt_tracker.track(
                 "outline", prompt, outline, llm_manager.model_configs["json"].name
@@ -307,7 +314,10 @@ def process_transcription(job_id: str, request: TranscriptionRequest):
                         angles="\n".join(segment["descriptions"]),
                     )
                     seg_response = llm_manager.query(
-                        "reasoning", [{"role": "user", "content": prompt}], f"segment_{idx}", sync=False,
+                        "reasoning",
+                        [{"role": "user", "content": prompt}],
+                        f"segment_{idx}",
+                        sync=False,
                     )
                     segments.append(seg_response)
                     prompt_tracker.track(
@@ -333,7 +343,10 @@ def process_transcription(job_id: str, request: TranscriptionRequest):
                     speaker_2_name=request.speaker_2_name,
                 )
                 seg_response = llm_manager.query(
-                    "reasoning", [{"role": "user", "content": prompt}], f"segment_dialogue_${idx}", sync=False
+                    "reasoning",
+                    [{"role": "user", "content": prompt}],
+                    f"segment_dialogue_${idx}",
+                    sync=False,
                 )
                 segment_transcripts.append(seg_response)
 
@@ -376,7 +389,9 @@ def process_transcription(job_id: str, request: TranscriptionRequest):
                 outline=full_outline,
             )
             conversation = llm_manager.query(
-                "reasoning", [{"role": "user", "content": prompt}], "revise_dialogue",
+                "reasoning",
+                [{"role": "user", "content": prompt}],
+                "revise_dialogue",
             )
             prompt_tracker.track(
                 "revise_dialogue",
@@ -397,7 +412,10 @@ def process_transcription(job_id: str, request: TranscriptionRequest):
                 speaker_2_name=request.speaker_2_name,
             )
             final_conversation = llm_manager.query(
-                "json", [{"role": "user", "content": prompt}], "final_conversation", json_schema=schema,
+                "json",
+                [{"role": "user", "content": prompt}],
+                "final_conversation",
+                json_schema=schema,
             )
             prompt_tracker.track(
                 "final_conversation",
@@ -442,7 +460,9 @@ def deep_dive_segment(
     prompt = DEEP_DIVE_PROMPT.render(
         text=text, topic=segment["descriptions"], duration=segment["duration"]
     )
-    outline = llm_manager.query("reasoning", [{"role": "user", "content": prompt}], "deep_dive")
+    outline = llm_manager.query(
+        "reasoning", [{"role": "user", "content": prompt}], "deep_dive"
+    )
     prompt_tracker.track(
         "deep_dive_outline",
         prompt,
@@ -452,7 +472,10 @@ def deep_dive_segment(
 
     prompt = OUTLINE_PROMPT.render(text=outline, schema=json.dumps(schema, indent=2))
     outline_response = llm_manager.query(
-        "json", [{"role": "user", "content": prompt}], "deep_dive_outline", json_schema=schema
+        "json",
+        [{"role": "user", "content": prompt}],
+        "deep_dive_outline",
+        json_schema=schema,
     )
     prompt_tracker.track(
         "deep_dive_outline_json",
@@ -476,7 +499,10 @@ def deep_dive_segment(
             angles="\n".join(subsegment["descriptions"]),
         )
         seg_response = llm_manager.query(
-            "subsegments", [{"role": "user", "content": prompt}], f"sub_segment_{idx}", sync=False
+            "subsegments",
+            [{"role": "user", "content": prompt}],
+            f"sub_segment_{idx}",
+            sync=False,
         )
         segments.append(seg_response)
         prompt_tracker.track(
