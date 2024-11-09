@@ -28,7 +28,11 @@ MINIO_BUCKET_NAME = os.getenv("MINIO_BUCKET_NAME", "audio-results")
 # TODO: implement cleanup and delete as well
 class StorageManager:
     def __init__(self, telemetry: OpenTelemetryInstrumentation):
-        """Initialize MinIO client and ensure bucket exists"""
+        """
+            Initialize MinIO client and ensure bucket exists
+            requires: OpenTelemetryInstrumentation instance for tracing since Minio
+            does not have an auto otel instrumentor 
+        """
         try:
             self.telemetry: OpenTelemetryInstrumentation = telemetry
             # pass in http_client for tracing
