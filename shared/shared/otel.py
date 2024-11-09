@@ -6,6 +6,8 @@ from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExport
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from opentelemetry.instrumentation.redis import RedisInstrumentor
 from opentelemetry.instrumentation.requests import RequestsInstrumentor
+from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
+from opentelemetry.instrumentation.urllib3 import URLLib3Instrumentor
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
@@ -19,6 +21,8 @@ class OpenTelemetryConfig:
     otlp_endpoint: str = "http://jaeger:4317"
     enable_redis: bool = True
     enable_requests: bool = True
+    enable_httpx: bool = True
+    enable_urllib3: bool = True
 
 
 class OpenTelemetryInstrumentation:
@@ -49,7 +53,7 @@ class OpenTelemetryInstrumentation:
         return self._tracer
 
     def initialize(
-        self, app, config: OpenTelemetryConfig
+        self, config: OpenTelemetryConfig, app = None
     ) -> "OpenTelemetryInstrumentation":
         """
         Initialize OpenTelemetry instrumentation with the given configuration.
@@ -80,10 +84,11 @@ class OpenTelemetryInstrumentation:
 
         self._tracer = trace.get_tracer(self._config.service_name)
 
-    def _instrument_app(self, app) -> None:
+    def _instrument_app(self, app = None) -> None:
         """Instrument the FastAPI application and optional components."""
         # Instrument FastAPI
-        FastAPIInstrumentor.instrument_app(app)
+        if app:
+            FastAPIInstrumentor.instrument_app(app)
 
         # Instrument Redis if enabled
         if self._config.enable_redis:
@@ -92,3 +97,9 @@ class OpenTelemetryInstrumentation:
         # Instrument requests library if enabled
         if self._config.enable_requests:
             RequestsInstrumentor().instrument()
+
+        if self._config.enable_httpx:
+            HTTPXClientInstrumentor().instrument()
+        
+        if self._config.enable_urllib3:
+            URLLib3Instrumentor().instrument()
