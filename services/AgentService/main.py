@@ -9,6 +9,8 @@ from flexagent.engine import Value
 from pydantic import BaseModel
 from pathlib import Path
 from dataclasses import dataclass
+from opentelemetry import context as context_api
+from opentelemetry.trace import Context
 from opentelemetry.trace.status import StatusCode
 from typing import List, Dict, Optional, Any
 import json
@@ -70,8 +72,6 @@ class ModelConfig:
 
 # FastAPI Application
 app = FastAPI(debug=True)
-job_manager = JobStatusManager(ServiceType.AGENT)
-storage_manager = StorageManager()
 
 telemetry = OpenTelemetryInstrumentation()
 config = OpenTelemetryConfig(
@@ -82,6 +82,8 @@ config = OpenTelemetryConfig(
 )
 telemetry.initialize(config, app)
 
+job_manager = JobStatusManager(ServiceType.AGENT, telemetry=telemetry)
+storage_manager = StorageManager(telemetry=telemetry)
 
 class LLMManager:
     DEFAULT_CONFIGS = {
@@ -162,7 +164,7 @@ class LLMManager:
             span.set_attribute("retries", retries)
             for attempt in range(retries):
                 with telemetry.tracer.start_as_current_span(
-                    "agent.query.inner"
+                    f"agent.query.{model_key}.inner"
                 ) as inner_span:
                     try:
                         extra_body = (
@@ -491,7 +493,7 @@ def deep_dive_segment(
 @app.post("/transcribe", status_code=202)
 def transcribe(request: TranscriptionRequest, background_tasks: BackgroundTasks):
     with telemetry.tracer.start_as_current_span("agent.transcribe") as span:
-        span.set_attribute("request", request)
+        span.set_attribute("request", request.model_dump(exclude={"markdown"}))
         job_manager.create_job(request.job_id)
         background_tasks.add_task(process_transcription, request.job_id, request)
         return {"job_id": request.job_id}

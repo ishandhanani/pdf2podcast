@@ -1,5 +1,7 @@
 from dataclasses import dataclass
 from typing import Optional
+import logging
+import os
 
 from opentelemetry import trace
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
@@ -11,6 +13,9 @@ from opentelemetry.instrumentation.urllib3 import URLLib3Instrumentor
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -66,6 +71,8 @@ class OpenTelemetryInstrumentation:
             self for method chaining
         """
         self._config = config
+        logger.info(f"Setting up tracing for service: {self._config.service_name}")
+        logger.info(f"Container ID: {os.uname().nodename}")
         self._setup_tracing()
         self._instrument_app(app)
         return self

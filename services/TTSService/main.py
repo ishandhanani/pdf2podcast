@@ -19,7 +19,6 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="ElevenLabs TTS Service", debug=True)
-job_manager = JobStatusManager(ServiceType.TTS)
 MAX_CONCURRENT_REQUESTS = int(os.getenv("MAX_CONCURRENT_REQUESTS", "5"))
 DEFAULT_VOICE_1 = os.getenv("DEFAULT_VOICE_1", "iP95p4xoKVk53GoZ742B")
 DEFAULT_VOICE_2 = os.getenv("DEFAULT_VOICE_2", "9BWtsMINqrJLrRacOk9x")
@@ -33,6 +32,8 @@ config = OpenTelemetryConfig(
     enable_requests=True,
 )
 telemetry.initialize(config, app)
+
+job_manager = JobStatusManager(ServiceType.TTS, telemetry=telemetry)
 
 
 class DialogueEntry(BaseModel):

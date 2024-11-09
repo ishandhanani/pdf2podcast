@@ -57,7 +57,7 @@ redis_client = redis.Redis.from_url(
 
 # Initialize the connection manager
 manager = ConnectionManager(redis_client=redis_client)
-storage_manager = StorageManager()
+storage_manager = StorageManager(telemetry=telemetry)
 
 # Service URLs
 PDF_SERVICE_URL = os.getenv("PDF_SERVICE_URL", "http://localhost:8003")
@@ -121,120 +121,124 @@ async def websocket_endpoint(websocket: WebSocket, job_id: str):
 def process_pdf_task(
     job_id: str, file_content: bytes, transcription_params: TranscriptionParams
 ):
-    try:
-        pubsub = redis_client.pubsub()
-        pubsub.subscribe("status_updates:all")
+    with telemetry.tracer.start_as_current_span("api.process_pdf_task") as span:
+        span.set_attribute("job_id", job_id)
+        try:
+            pubsub = redis_client.pubsub()
+            pubsub.subscribe("status_updates:all")
 
-        # Start PDF Service
-        requests.post(
-            f"{PDF_SERVICE_URL}/convert",
-            files={"file": ("file.pdf", file_content, "application/pdf")},
-            data={"job_id": job_id},
-        )
+            # Start PDF Service
+            requests.post(
+                f"{PDF_SERVICE_URL}/convert",
+                files={"file": ("file.pdf", file_content, "application/pdf")},
+                data={"job_id": job_id},
+            )
 
-        storage_manager.store_file(
-            job_id,
-            file_content,
-            f"{job_id}.pdf",
-            "application/pdf",
-            transcription_params,
-        )
-        logger.info(f"Stored original PDF for {job_id} in storage")
+            storage_manager.store_file(
+                job_id,
+                file_content,
+                f"{job_id}.pdf",
+                "application/pdf",
+                transcription_params,
+            )
+            logger.info(f"Stored original PDF for {job_id} in storage")
 
-        # Monitor services
-        current_service = ServiceType.PDF
-        while True:
-            message = pubsub.get_message()
-            if message and message["type"] == "message":
-                update = StatusUpdate.model_validate_json(message["data"].decode())
+            # Monitor services
+            current_service = ServiceType.PDF
+            while True:
+                message = pubsub.get_message()
+                if message and message["type"] == "message":
+                    update = StatusUpdate.model_validate_json(message["data"].decode())
 
-                if update.job_id == job_id:
-                    logger.info(f"Received update for job {job_id}: {update}")
+                    if update.job_id == job_id:
+                        logger.info(f"Received update for job {job_id}: {update}")
 
-                    if update.status == JobStatus.FAILED:
-                        raise Exception(f"{update.service}: {update.message}")
+                        if update.status == JobStatus.FAILED:
+                            raise Exception(f"{update.service}: {update.message}")
 
-                    if update.status == JobStatus.COMPLETED:
-                        if current_service == ServiceType.PDF:
-                            # Start Agent Service
-                            markdown_content = requests.get(
-                                f"{PDF_SERVICE_URL}/output/{job_id}"
-                            ).text
-                            requests.post(
-                                f"{AGENT_SERVICE_URL}/transcribe",
-                                json={
-                                    "markdown": markdown_content,
-                                    "job_id": job_id,
-                                    **transcription_params.model_dump(),
-                                },
-                            )
-                            current_service = ServiceType.AGENT
+                        if update.status == JobStatus.COMPLETED:
+                            if current_service == ServiceType.PDF:
+                                # Start Agent Service
+                                markdown_content = requests.get(
+                                    f"{PDF_SERVICE_URL}/output/{job_id}"
+                                ).text
+                                requests.post(
+                                    f"{AGENT_SERVICE_URL}/transcribe",
+                                    json={
+                                        "markdown": markdown_content,
+                                        "job_id": job_id,
+                                        **transcription_params.model_dump(),
+                                    },
+                                )
+                                current_service = ServiceType.AGENT
 
-                        elif current_service == ServiceType.AGENT:
-                            # Start TTS Service
-                            agent_result = requests.get(
-                                f"{AGENT_SERVICE_URL}/output/{job_id}"
-                            ).json()
+                            elif current_service == ServiceType.AGENT:
+                                # Start TTS Service
+                                agent_result = requests.get(
+                                    f"{AGENT_SERVICE_URL}/output/{job_id}"
+                                ).json()
 
-                            # Store script result in minio
-                            storage_manager.store_file(
-                                job_id,
-                                json.dumps(agent_result).encode(),
-                                f"{job_id}_agent_result.json",
-                                "application/json",
-                                transcription_params,
-                            )
-                            logger.info(
-                                f"Stored agent result for {job_id} in minio, size: {len(json.dumps(agent_result).encode())} bytes"
-                            )
+                                # Store script result in minio
+                                storage_manager.store_file(
+                                    job_id,
+                                    json.dumps(agent_result).encode(),
+                                    f"{job_id}_agent_result.json",
+                                    "application/json",
+                                    transcription_params,
+                                )
+                                logger.info(
+                                    f"Stored agent result for {job_id} in minio, size: {len(json.dumps(agent_result).encode())} bytes"
+                                )
 
-                            requests.post(
-                                f"{TTS_SERVICE_URL}/generate_tts",
-                                json={
-                                    "dialogue": agent_result["dialogue"],
-                                    "job_id": job_id,
-                                    "voice_mapping": transcription_params.voice_mapping,  # Forward the voice mapping
-                                },
-                            )
-                            current_service = ServiceType.TTS
+                                requests.post(
+                                    f"{TTS_SERVICE_URL}/generate_tts",
+                                    json={
+                                        "dialogue": agent_result["dialogue"],
+                                        "job_id": job_id,
+                                        "voice_mapping": transcription_params.voice_mapping,  # Forward the voice mapping
+                                    },
+                                )
+                                current_service = ServiceType.TTS
 
-                        elif current_service == ServiceType.TTS:
-                            # Get final output and store it
-                            logger.info(
-                                f"TTS completed for {job_id}, fetching and storing result"
-                            )
-                            audio_content = requests.get(
-                                f"{TTS_SERVICE_URL}/output/{job_id}"
-                            ).content
+                            elif current_service == ServiceType.TTS:
+                                # Get final output and store it
+                                logger.info(
+                                    f"TTS completed for {job_id}, fetching and storing result"
+                                )
+                                audio_content = requests.get(
+                                    f"{TTS_SERVICE_URL}/output/{job_id}"
+                                ).content
 
-                            # Store both the content and the ready flag
-                            redis_client.set(
-                                f"result:{job_id}:{ServiceType.TTS}",
-                                audio_content,
-                                ex=MP3_CACHE_TTL,
-                            )
-                            redis_client.set(
-                                f"final_status:{job_id}", "ready", ex=MP3_CACHE_TTL
-                            )
+                                # Store both the content and the ready flag
+                                redis_client.set(
+                                    f"result:{job_id}:{ServiceType.TTS}",
+                                    audio_content,
+                                    ex=MP3_CACHE_TTL,
+                                )
+                                redis_client.set(
+                                    f"final_status:{job_id}", "ready", ex=MP3_CACHE_TTL
+                                )
 
-                            # Store in DB
-                            storage_manager.store_audio(
-                                job_id,
-                                audio_content,
-                                f"{job_id}.mp3",
-                                transcription_params,
-                            )
+                                # Store in DB
+                                storage_manager.store_audio(
+                                    job_id,
+                                    audio_content,
+                                    f"{job_id}.mp3",
+                                    transcription_params,
+                                )
 
-                            logger.info(
-                                f"Stored TTS result for {job_id}, size: {len(audio_content)} bytes, with TTL: {MP3_CACHE_TTL} seconds"
-                            )
-                            return audio_content
+                                logger.info(
+                                    f"Stored TTS result for {job_id}, size: {len(audio_content)} bytes, with TTL: {MP3_CACHE_TTL} seconds"
+                                )
+                                return audio_content
 
-            time.sleep(0.01)
+                time.sleep(0.01)
 
-    except Exception as e:
-        logger.error(f"Job {job_id} failed: {str(e)}")
-        raise
+        except Exception as e:
+            span.set_status(StatusCode.ERROR, "process_pdf_task failed")
+            span.record_exception(e)
+            logger.error(f"Job {job_id} failed: {str(e)}")
+            raise
 
 
 @app.post("/process_pdf", status_code=202)
@@ -254,7 +258,7 @@ async def process_pdf(
         try:
             params_dict = json.loads(transcription_params)
             params = TranscriptionParams.model_validate(params_dict)
-            span.set_attribute("transcription_params", params)
+            span.set_attribute("transcription_params", params.model_dump())
         except json.JSONDecodeError:
             span.set_status(
                 status=StatusCode.ERROR,
@@ -277,7 +281,7 @@ async def process_pdf(
         # Start processing
         file_content = await file.read()
         background_tasks.add_task(process_pdf_task, job_id, file_content, params)
-        span.set_status(status=StatusCode.OK, description="job started")
+        span.set_status(status=StatusCode.OK)
 
         return {"job_id": job_id}
 
@@ -311,7 +315,7 @@ async def get_output(job_id: str):
         # First check if the final result is ready
         span.set_attribute("job_id", job_id)
         is_ready = redis_client.get(f"final_status:{job_id}")
-        span.set_attribute("is_ready", is_ready)
+        span.set_attribute("is_ready", is_ready if is_ready else False)
         if not is_ready:
             # Check if TTS service reports completion
             tts_status = redis_client.hgetall(f"status:{job_id}:{ServiceType.TTS}")

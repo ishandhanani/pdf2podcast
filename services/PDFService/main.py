@@ -17,7 +17,6 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = FastAPI(debug=True)
-job_manager = JobStatusManager(ServiceType.PDF)
 
 telemetry = OpenTelemetryInstrumentation()
 config = OpenTelemetryConfig(
@@ -27,6 +26,8 @@ config = OpenTelemetryConfig(
     enable_requests=True,
 )
 telemetry.initialize(config, app)
+
+job_manager = JobStatusManager(ServiceType.PDF, telemetry=telemetry)
 
 # Configuration
 MODEL_API_URL = os.getenv("MODEL_API_URL", "https://pdf-gyrdps568.brevlab.com")

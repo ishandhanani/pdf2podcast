@@ -22,23 +22,14 @@ MINIO_ACCESS_KEY = os.getenv("MINIO_ACCESS_KEY", "minioadmin")
 MINIO_SECRET_KEY = os.getenv("MINIO_SECRET_KEY", "minioadmin")
 MINIO_BUCKET_NAME = os.getenv("MINIO_BUCKET_NAME", "audio-results")
 
-telemetry = OpenTelemetryInstrumentation()
-config = OpenTelemetryConfig(
-    service_name="agent-service",
-    otlp_endpoint=os.getenv("OTLP_ENDPOINT", "http://jaeger:4317"),
-    enable_redis=True,
-    enable_requests=True,
-)
-telemetry.initialize(config)
-
-
 # TODO: use this to wrap redis as well
 # TODO: wrap errors in StorageError
 # TODO: implement cleanup and delete as well
 class StorageManager:
-    def __init__(self):
+    def __init__(self, telemetry: OpenTelemetryInstrumentation):
         """Initialize MinIO client and ensure bucket exists"""
         try:
+            self.telemetry: OpenTelemetryInstrumentation = telemetry   
             # pass in http_client for tracing
             http_client = urllib3.PoolManager(
                 timeout=Timeout(connect=5, read=5),
@@ -80,7 +71,7 @@ class StorageManager:
         metadata: dict = None,
     ) -> None:
         """Store any file type in MinIO with metadata"""
-        with telemetry.tracer.start_as_current_span("store_file") as span:
+        with self.telemetry.tracer.start_as_current_span("store_file") as span:
             span.set_attribute("job_id", job_id)
             span.set_attribute("filename", filename)
             span.set_attribute("content_type", content_type)
@@ -111,7 +102,7 @@ class StorageManager:
         transcription_params: TranscriptionParams,
     ):
         """Store audio file with metadata in MinIO"""
-        with telemetry.tracer.start_as_current_span("store_audio") as span:
+        with self.telemetry.tracer.start_as_current_span("store_audio") as span:
             span.set_attribute("job_id", job_id)
             span.set_attribute("filename", filename)
             try:
@@ -143,7 +134,7 @@ class StorageManager:
 
     def get_podcast_audio(self, job_id: str) -> Optional[str]:
         """Get the audio data for a specific podcast by job_id"""
-        with telemetry.tracer.start_as_current_span("get_podcast_audio") as span:
+        with self.telemetry.tracer.start_as_current_span("get_podcast_audio") as span:
             span.set_attribute("job_id", job_id)
             try:
                 # Find the file with matching job_id
@@ -169,7 +160,7 @@ class StorageManager:
 
     def get_file(self, job_id: str, filename: str) -> Optional[bytes]:
         """Get any file from storage by job_id and filename"""
-        with telemetry.tracer.start_as_current_span("get_file") as span:
+        with self.telemetry.tracer.start_as_current_span("get_file") as span:
             span.set_attribute("job_id", job_id)
             span.set_attribute("filename", filename)
             try:
@@ -194,7 +185,7 @@ class StorageManager:
 
     def delete_job_files(self, job_id: str) -> bool:
         """Delete all files associated with a job_id"""
-        with telemetry.tracer.start_as_current_span("delete_job_files") as span:
+        with self.telemetry.tracer.start_as_current_span("delete_job_files") as span:
             span.set_attribute("job_id", job_id)
             try:
                 # List all objects with the job_id prefix
@@ -219,13 +210,13 @@ class StorageManager:
     # TODO: rework
     def list_files_metadata(self):
         """Lists metadata in the from of TranscriptionParams for an audio file which was created in store_audio"""
-        with telemetry.tracer.start_as_current_span("list_files_metadata") as span:
+        with self.telemetry.tracer.start_as_current_span("list_files_metadata") as span:
             try:
                 objects = self.client.list_objects(self.bucket_name, recursive=True)
-                span.set_attribute("num_files", len(objects))
                 files = []
 
                 for obj in objects:
+                    logger.info(f"Object: {obj.object_name}")
                     if obj.object_name.endswith("/"):
                         continue
 
@@ -234,6 +225,7 @@ class StorageManager:
                             self.bucket_name, obj.object_name
                         )
                         path_parts = obj.object_name.split("/")
+                        logger.info(f"Path parts: {path_parts}")
 
                         if not path_parts[-1].endswith(".mp3"):
                             continue
