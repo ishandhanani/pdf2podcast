@@ -2,6 +2,7 @@ from fastapi import FastAPI, BackgroundTasks, HTTPException
 from shared.shared_types import ServiceType, JobStatus, Conversation
 from shared.storage import StorageManager
 from shared.job import JobStatusManager
+from shared.otel import OpenTelemetryInstrumentation, OpenTelemetryConfig
 import flexagent as fa
 from flexagent.backend import BackendConfig
 from flexagent.engine import Value
@@ -193,6 +194,15 @@ class PromptTracker:
 app = FastAPI(debug=True)
 job_manager = JobStatusManager(ServiceType.AGENT)
 storage_manager = StorageManager()
+
+telemetry = OpenTelemetryInstrumentation()
+config = OpenTelemetryConfig(
+    service_name="api-service",
+    otlp_endpoint=os.getenv("OTLP_ENDPOINT", "http://jaeger:4317"),
+    enable_redis=True,
+    enable_requests=True,
+)
+telemetry.initialize(app, config)
 
 
 def process_transcription(job_id: str, request: TranscriptionRequest):
@@ -476,7 +486,7 @@ def get_output(job_id: str):
     return json.loads(result.decode())
 
 
-@app.get("/transcribe/health")
+@app.get("/health")
 def health():
     return {
         "status": "healthy",

@@ -44,6 +44,7 @@ services:
       - pdf-service
       - agent-service
       - tts-service
+      - jaeger
     networks:
       - app-network
 
@@ -99,16 +100,15 @@ services:
       - "16686:16686" # UI
       - "4317:4317" # OTLP GRPC
       - "4318:4318" # OTLP HTTP
-      - "14250:14250" # Model/collector
     environment:
       - COLLECTOR_OTLP_ENABLED=true
-      - COLLECTOR_ZIPKIN_HOST_PORT=:9411
-      - COLLECTOR_OTLP_GRPC_HOST_PORT=:4317
     healthcheck:
       test: ["CMD", "wget", "--spider", "localhost:16686"]
       interval: 5s
       timeout: 3s
       retries: 3
+    networks:
+      - app-network
 
 volumes:
   redis_data:

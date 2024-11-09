@@ -22,6 +22,7 @@ from shared.shared_types import (
 from shared.connection import ConnectionManager
 from shared.storage import StorageManager
 from shared.otel import OpenTelemetryInstrumentation, OpenTelemetryConfig
+from opentelemetry.trace.status import StatusCode
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import ValidationError
 import redis
@@ -45,7 +46,7 @@ config = OpenTelemetryConfig(
     service_name="api-service",
     otlp_endpoint=os.getenv("OTLP_ENDPOINT", "http://jaeger:4317"),
     enable_redis=True,
-    enable_requests=True
+    enable_requests=True,
 )
 telemetry.initialize(app, config)
 
@@ -242,27 +243,43 @@ async def process_pdf(
     file: UploadFile = File(...),
     transcription_params: str = Form(...),
 ):
-    if file.content_type != "application/pdf":
-        raise HTTPException(status_code=400, detail="Only PDF files are allowed")
+    with telemetry.tracer.start_as_current_span("process_pdf") as span:
+        span.set_attribute("request", transcription_params)
+        span.set_attribute("file_size", file.size)
+        span.set_attribute("file_content_type", file.content_type)
+        if file.content_type != "application/pdf":
+            span.set_status(status=StatusCode.ERROR, description="invalid file type")
+            raise HTTPException(status_code=400, detail="Only PDF files are allowed")
 
-    try:
-        params_dict = json.loads(transcription_params)
-        params = TranscriptionParams.model_validate(params_dict)
-    except json.JSONDecodeError:
-        raise HTTPException(
-            status_code=400, detail="Invalid JSON in transcription_params"
-        )
-    except ValidationError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        try:
+            params_dict = json.loads(transcription_params)
+            params = TranscriptionParams.model_validate(params_dict)
+            span.set_attribute("transcription_params", params)
+        except json.JSONDecodeError:
+            span.set_status(
+                status=StatusCode.ERROR,
+                description="invalid JSON in transcription_params",
+            )
+            raise HTTPException(
+                status_code=400, detail="Invalid JSON in transcription_params"
+            )
+        except ValidationError as e:
+            # span.record_exception(e)
+            span.set_status(
+                status=StatusCode.ERROR, description="invalid transcription_params"
+            )
+            raise HTTPException(status_code=400, detail=str(e))
 
-    # Create job
-    job_id = str(int(time.time()))
+        # Create job
+        job_id = str(int(time.time()))
+        span.set_attribute("job_id", job_id)
 
-    # Start processing
-    file_content = await file.read()
-    background_tasks.add_task(process_pdf_task, job_id, file_content, params)
+        # Start processing
+        file_content = await file.read()
+        background_tasks.add_task(process_pdf_task, job_id, file_content, params)
+        span.set_status(status=StatusCode.OK, description="job started")
 
-    return {"job_id": job_id}
+        return {"job_id": job_id}
 
 
 @app.get("/status/{job_id}")
@@ -524,6 +541,7 @@ async def delete_saved_podcast(job_id: str):
             status_code=500, detail=f"Failed to delete podcast: {str(e)}"
         )
 
+
 @app.get("/health")
 async def health():
     """Health check endpoint with OpenTelemetry instrumentation"""
@@ -537,26 +555,32 @@ async def health():
                 logger.info("Checking Redis connection")
                 redis_span.set_attribute("component", "redis")
                 redis_alive = redis_client.ping()
-                redis_span.set_attribute("redis.status", "up" if redis_alive else "down")
+                redis_span.set_attribute(
+                    "redis.status", "up" if redis_alive else "down"
+                )
                 logger.info(f"Redis status: {'up' if redis_alive else 'down'}")
-                
+
             # Check dependent services
             services = {
                 "pdf": PDF_SERVICE_URL,
                 "agent": AGENT_SERVICE_URL,
-                "tts": TTS_SERVICE_URL
+                "tts": TTS_SERVICE_URL,
             }
-            
+
             service_status = {}
             for service_name, url in services.items():
-                with telemetry.tracer.start_as_current_span(f"{service_name}_check") as service_span:
+                with telemetry.tracer.start_as_current_span(
+                    f"{service_name}_check"
+                ) as service_span:
                     logger.info(f"Checking {service_name} service at {url}")
                     service_span.set_attribute("component", service_name)
                     try:
                         response = requests.get(f"{url}/health", timeout=5)
                         status = "up" if response.status_code == 200 else "down"
                         service_span.set_attribute(f"{service_name}.status", status)
-                        service_span.set_attribute(f"{service_name}.response_code", response.status_code)
+                        service_span.set_attribute(
+                            f"{service_name}.response_code", response.status_code
+                        )
                         service_status[service_name] = status
                         logger.info(f"{service_name} status: {status}")
                     except Exception as e:
@@ -565,26 +589,28 @@ async def health():
                         service_span.set_attribute(f"{service_name}.error", str(e))
                         service_span.record_exception(e)
                         service_status[service_name] = "down"
-            
+
             # Set overall health status
-            all_healthy = redis_alive and all(status == "up" for status in service_status.values())
-            span.set_attribute("health.status", "healthy" if all_healthy else "unhealthy")
-            logger.info(f"Overall health status: {'healthy' if all_healthy else 'unhealthy'}")
-            
+            all_healthy = redis_alive and all(
+                status == "up" for status in service_status.values()
+            )
+            span.set_attribute(
+                "health.status", "healthy" if all_healthy else "unhealthy"
+            )
+            logger.info(
+                f"Overall health status: {'healthy' if all_healthy else 'unhealthy'}"
+            )
+
             return {
                 "status": "healthy" if all_healthy else "unhealthy",
                 "redis": "up" if redis_alive else "down",
                 "services": service_status,
-                "timestamp": time.time()
+                "timestamp": time.time(),
             }
-            
+
         except Exception as e:
             logger.error(f"Health check failed: {str(e)}")
             span.set_attribute("health.status", "unhealthy")
             span.set_attribute("error", str(e))
             span.record_exception(e)
-            return {
-                "status": "unhealthy",
-                "error": str(e),
-                "timestamp": time.time()
-            }
+            return {"status": "unhealthy", "error": str(e), "timestamp": time.time()}
