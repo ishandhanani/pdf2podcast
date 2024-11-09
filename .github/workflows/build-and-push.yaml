@@ -108,7 +108,7 @@ jobs:
           push: true
           tags: nvcr.io/pfteb4cqjzrs/playground/pdf-model-api:${{ needs.setup.outputs.version }}
   
-  pdf-model-api:
+  pdf-model-worker:
     needs: setup
     runs-on: ubuntu-latest
     permissions:
