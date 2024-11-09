@@ -29,9 +29,9 @@ MINIO_BUCKET_NAME = os.getenv("MINIO_BUCKET_NAME", "audio-results")
 class StorageManager:
     def __init__(self, telemetry: OpenTelemetryInstrumentation):
         """
-            Initialize MinIO client and ensure bucket exists
-            requires: OpenTelemetryInstrumentation instance for tracing since Minio
-            does not have an auto otel instrumentor 
+        Initialize MinIO client and ensure bucket exists
+        requires: OpenTelemetryInstrumentation instance for tracing since Minio
+        does not have an auto otel instrumentor
         """
         try:
             self.telemetry: OpenTelemetryInstrumentation = telemetry
