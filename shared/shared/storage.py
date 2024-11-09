@@ -31,6 +31,7 @@ config = OpenTelemetryConfig(
 )
 telemetry.initialize(config)
 
+
 # TODO: use this to wrap redis as well
 # TODO: wrap errors in StorageError
 # TODO: implement cleanup and delete as well
@@ -43,10 +44,8 @@ class StorageManager:
                 timeout=Timeout(connect=5, read=5),
                 maxsize=10,
                 retries=Retry(
-                    total=5,
-                    backoff_factor=0.2,
-                    status_forcelist=[500, 502, 503, 504]
-                )
+                    total=5, backoff_factor=0.2, status_forcelist=[500, 502, 503, 504]
+                ),
             )
             self.client = Minio(
                 os.getenv("MINIO_ENDPOINT", "minio:9000"),
@@ -99,7 +98,9 @@ class StorageManager:
             except Exception as e:
                 span.set_status(StatusCode.ERROR)
                 span.record_exception(e)
-                logger.error(f"Failed to store file {filename} for job {job_id}: {str(e)}")
+                logger.error(
+                    f"Failed to store file {filename} for job {job_id}: {str(e)}"
+                )
                 raise
 
     def store_audio(
@@ -186,7 +187,9 @@ class StorageManager:
             except Exception as e:
                 span.set_status(StatusCode.ERROR)
                 span.record_exception(e)
-                logger.error(f"Failed to get file {filename} for job_id {job_id}: {str(e)}")
+                logger.error(
+                    f"Failed to get file {filename} for job_id {job_id}: {str(e)}"
+                )
                 raise
 
     def delete_job_files(self, job_id: str) -> bool:
@@ -227,7 +230,9 @@ class StorageManager:
                         continue
 
                     try:
-                        stat = self.client.stat_object(self.bucket_name, obj.object_name)
+                        stat = self.client.stat_object(
+                            self.bucket_name, obj.object_name
+                        )
                         path_parts = obj.object_name.split("/")
 
                         if not path_parts[-1].endswith(".mp3"):
@@ -250,7 +255,9 @@ class StorageManager:
                                     "X-Amz-Meta-Transcription-Params"
                                 )
                                 if params:
-                                    file_info["transcription_params"] = json.loads(params)
+                                    file_info["transcription_params"] = json.loads(
+                                        params
+                                    )
                             except json.JSONDecodeError:
                                 logger.warning(
                                     f"Could not parse transcription params for {obj.object_name}"
@@ -262,7 +269,9 @@ class StorageManager:
                         )
 
                     except Exception as e:
-                        logger.error(f"Error processing object {obj.object_name}: {str(e)}")
+                        logger.error(
+                            f"Error processing object {obj.object_name}: {str(e)}"
+                        )
                         continue
 
                 files.sort(key=lambda x: x["created_at"], reverse=True)

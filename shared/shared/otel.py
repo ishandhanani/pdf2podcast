@@ -53,7 +53,7 @@ class OpenTelemetryInstrumentation:
         return self._tracer
 
     def initialize(
-        self, config: OpenTelemetryConfig, app = None
+        self, config: OpenTelemetryConfig, app=None
     ) -> "OpenTelemetryInstrumentation":
         """
         Initialize OpenTelemetry instrumentation with the given configuration.
@@ -84,7 +84,7 @@ class OpenTelemetryInstrumentation:
 
         self._tracer = trace.get_tracer(self._config.service_name)
 
-    def _instrument_app(self, app = None) -> None:
+    def _instrument_app(self, app=None) -> None:
         """Instrument the FastAPI application and optional components."""
         # Instrument FastAPI
         if app:
@@ -100,6 +100,6 @@ class OpenTelemetryInstrumentation:
 
         if self._config.enable_httpx:
             HTTPXClientInstrumentor().instrument()
-        
+
         if self._config.enable_urllib3:
             URLLib3Instrumentor().instrument()
