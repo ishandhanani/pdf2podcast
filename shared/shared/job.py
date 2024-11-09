@@ -7,7 +7,12 @@ import threading
 
 
 class JobStatusManager:
-    def __init__(self, service_type: ServiceType, telemetry: OpenTelemetryInstrumentation, redis_url="redis://redis:6379"):
+    def __init__(
+        self,
+        service_type: ServiceType,
+        telemetry: OpenTelemetryInstrumentation,
+        redis_url="redis://redis:6379",
+    ):
         self.telemetry = telemetry
         self.redis = redis.Redis.from_url(redis_url, decode_responses=False)
         self.service_type = service_type
@@ -53,7 +58,9 @@ class JobStatusManager:
             self.redis.set(f"result:{job_id}:{self.service_type}", result)
 
     def set_result_with_expiration(self, job_id: str, result: bytes, ex: int):
-        with self.telemetry.tracer.start_as_current_span("job.set_result_with_expiration") as span:
+        with self.telemetry.tracer.start_as_current_span(
+            "job.set_result_with_expiration"
+        ) as span:
             span.set_attribute("job_id", job_id)
             self.redis.set(f"result:{job_id}:{self.service_type}", result, ex=ex)
 

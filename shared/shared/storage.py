@@ -4,7 +4,7 @@ import base64
 from minio import Minio
 from minio.error import S3Error
 from shared.shared_types import TranscriptionParams
-from shared.otel import OpenTelemetryInstrumentation, OpenTelemetryConfig
+from shared.otel import OpenTelemetryInstrumentation
 from opentelemetry.trace.status import StatusCode
 import os
 import logging
@@ -22,6 +22,7 @@ MINIO_ACCESS_KEY = os.getenv("MINIO_ACCESS_KEY", "minioadmin")
 MINIO_SECRET_KEY = os.getenv("MINIO_SECRET_KEY", "minioadmin")
 MINIO_BUCKET_NAME = os.getenv("MINIO_BUCKET_NAME", "audio-results")
 
+
 # TODO: use this to wrap redis as well
 # TODO: wrap errors in StorageError
 # TODO: implement cleanup and delete as well
@@ -29,7 +30,7 @@ class StorageManager:
     def __init__(self, telemetry: OpenTelemetryInstrumentation):
         """Initialize MinIO client and ensure bucket exists"""
         try:
-            self.telemetry: OpenTelemetryInstrumentation = telemetry   
+            self.telemetry: OpenTelemetryInstrumentation = telemetry
             # pass in http_client for tracing
             http_client = urllib3.PoolManager(
                 timeout=Timeout(connect=5, read=5),

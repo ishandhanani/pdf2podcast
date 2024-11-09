@@ -9,8 +9,6 @@ from flexagent.engine import Value
 from pydantic import BaseModel
 from pathlib import Path
 from dataclasses import dataclass
-from opentelemetry import context as context_api
-from opentelemetry.trace import Context
 from opentelemetry.trace.status import StatusCode
 from typing import List, Dict, Optional, Any
 import json
@@ -84,6 +82,7 @@ telemetry.initialize(config, app)
 
 job_manager = JobStatusManager(ServiceType.AGENT, telemetry=telemetry)
 storage_manager = StorageManager(telemetry=telemetry)
+
 
 class LLMManager:
     DEFAULT_CONFIGS = {
