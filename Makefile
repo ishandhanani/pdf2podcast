@@ -62,10 +62,6 @@ prod: check_env
 
 # Production target for pdf model service
 model-prod:
-	@if [ ! -d "data/minio" ]; then \
-		echo "$(GREEN)Creating data/minio directory...$(NC)"; \
-		mkdir -p data/minio; \
-	fi
 	docker compose -f services/PDFService/PDFModelService/docker-compose-remote.yml down
 	@echo "$(GREEN)Starting production environment with version $(VERSION)...$(NC)"
 	VERSION=$(VERSION) docker compose -f services/PDFService/PDFModelService/docker-compose-remote.yml up
