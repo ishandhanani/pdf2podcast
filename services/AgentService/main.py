@@ -461,7 +461,7 @@ def deep_dive_segment(
         text=text, topic=segment["descriptions"], duration=segment["duration"]
     )
     outline = llm_manager.query(
-        "reasoning", [{"role": "user", "content": prompt}], "deep_dive"
+        "reasoning", [{"role": "user", "content": prompt}], "deep_dive_outline"
     )
     prompt_tracker.track(
         "deep_dive_outline",
@@ -474,7 +474,7 @@ def deep_dive_segment(
     outline_response = llm_manager.query(
         "json",
         [{"role": "user", "content": prompt}],
-        "deep_dive_outline",
+        "deep_dive_outline_json",
         json_schema=schema,
     )
     prompt_tracker.track(
