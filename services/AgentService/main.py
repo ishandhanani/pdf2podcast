@@ -293,18 +293,18 @@ def process_transcription(job_id: str, request: TranscriptionRequest):
 
             segments: Dict[str, Value] = {}
             sub_outline = {}
-            for idx, segment_transcript_val in enumerate(outline_json["segments"]):
+            for idx, segment in enumerate(outline_json["segments"]):
                 job_manager.update_status(
                     job_id,
                     JobStatus.PROCESSING,
-                    f"Processing segment {idx + 1}/{len(outline_json['segments'])}: {segment_transcript_val['section']}",
+                    f"Processing segment {idx + 1}/{len(outline_json['segments'])}: {segment['section']}",
                 )
 
                 if idx == longest_segment_idx:
                     deep_dive_res = deep_dive_segment(
                         job_id,
                         request.markdown,
-                        segment_transcript_val,
+                        segment,
                         llm_manager,
                         schema,
                         prompt_tracker,
@@ -315,9 +315,9 @@ def process_transcription(job_id: str, request: TranscriptionRequest):
                 else:
                     prompt = SEGMENT_TRANSCRIPT_PROMPT.render(
                         text=request.markdown,
-                        duration=segment_transcript_val["duration"],
-                        topic=segment_transcript_val["section"],
-                        angles="\n".join(segment_transcript_val["descriptions"]),
+                        duration=segment["duration"],
+                        topic=segment["section"],
+                        angles="\n".join(segment["descriptions"]),
                     )
                     seg_response = llm_manager.query(
                         "reasoning",
@@ -334,28 +334,32 @@ def process_transcription(job_id: str, request: TranscriptionRequest):
 
             # Generate dialogue
             segment_transcripts: list[Value] = []
-            for idx, (segment_name, segment_value) in enumerate(segments.items()):
-                segment_res = segment_value.get()
-                prompt_tracker.update_result(segment_name, segment_res)
+            for idx, segment in enumerate(outline_json["segments"]):
+                segment_name = f"segment_transcript_{idx}"
+                seg_response = segments.get(segment_name, None)
+                if not seg_response:
+                    logger.warning(f"Segment {idx} not found in segment transcripts")
+                    continue
+                prompt_tracker.update_result(segment_name, seg_response.get())
                 job_manager.update_status(
                     job_id,
                     JobStatus.PROCESSING,
                     f"Converting segment {idx + 1}/{len(outline_json['segments'])} to dialogue",
                 )
                 prompt = RAW_PODCAST_DIALOGUE_PROMPT_v2.render(
-                    text=segment_res,
-                    duration=segment_transcript_val["duration"],
-                    descriptions=segment_transcript_val["descriptions"],
+                    text=seg_response.get(),
+                    duration=segment["duration"],
+                    descriptions=segment["descriptions"],
                     speaker_1_name=request.speaker_1_name,
                     speaker_2_name=request.speaker_2_name,
                 )
-                seg_transcript_res = llm_manager.query(
+                seg_transcript_response = llm_manager.query(
                     "reasoning",
                     [{"role": "user", "content": prompt}],
                     f"segment_dialogue_{idx}",
                     sync=False,
                 )
-                segment_transcripts.append(seg_transcript_res)
+                segment_transcripts.append(seg_transcript_response)
 
             # Combine transcripts
             job_manager.update_status(
