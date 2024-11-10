@@ -338,7 +338,7 @@ def process_transcription(job_id: str, request: TranscriptionRequest):
                 segment_name = f"segment_transcript_{idx}"
                 seg_response = segments.get(segment_name, None)
                 if not seg_response:
-                    logger.warning(f"Segment {idx} not found in segment transcripts")
+                    logger.warning(f"Segment {segment_name} not found in segment transcripts")
                     continue
                 prompt_tracker.update_result(segment_name, seg_response.get())
                 job_manager.update_status(
