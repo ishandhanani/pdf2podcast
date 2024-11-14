@@ -221,7 +221,7 @@ You should keep all analogies, stories, examples, and quotes from the transcript
 *Only return the full dialogue transcript; do not include any other information like time budget or segment names.*
 """
 
-REVISE_DIALOGUE_PROMPT_STR = """You are revising a podcast transcript to make it more engaging while preserving its content and structure. You have access to three key elements:
+COMBINE_DIALOGUES_PROMPT_STR = """You are revising a podcast transcript to make it more engaging while preserving its content and structure. You have access to three key elements:
 
 1. The podcast outline
 <outline>
@@ -247,11 +247,6 @@ Your task is to:
 - Break long monologues into natural back-and-forth dialogue
 - Limit each speaker's turn to maximum 3 sentences
 - Keep the conversation flowing naturally between topics
-- Convert all numbers and symbols to spoken form:
-  * Numbers should be spelled out (e.g., "one thousand" instead of "1000")
-  * Currency should be expressed as "[amount] [unit of currency]" (e.g., "one thousand dollars" instead of "$1000")
-  * Mathematical symbols should be spoken (e.g., "equals" instead of "=", "plus" instead of "+")
-  * Percentages should be spoken as "percent" (e.g., "fifty percent" instead of "50%")
 
 Key guidelines:
 - Avoid explicit transition phrases like "Welcome back" or "Now let's discuss"
@@ -285,6 +280,13 @@ You absolutely must, without exception:
 - Ensure all apostrophes, quotes, and special characters are properly formatted
 - Do not escape Unicode characters in the output
 
+You absolutely must, without exception:
+- Convert all numbers and symbols to spoken form:
+  * Numbers should be spelled out (e.g., "one thousand" instead of "1000")
+  * Currency should be expressed as "[amount] [unit of currency]" (e.g., "one thousand dollars" instead of "$1000")
+  * Mathematical symbols should be spoken (e.g., "equals" instead of "=", "plus" instead of "+")
+  * Percentages should be spoken as "percent" (e.g., "fifty percent" instead of "50%")
+
 Please output the JSON following the provided schema, maintaining all conversational details and speaker attributions. The output should use proper Unicode characters directly, not escaped sequences. Do not output anything besides the JSON."""
 
 PROMPT_TEMPLATES = {
@@ -294,7 +296,7 @@ PROMPT_TEMPLATES = {
     "prompt_with_references": PROMPT_WITH_REFERENCES_STR,
     "prompt_no_references": PROMPT_NO_REFERENCES_STR,
     "transcript_to_dialogue_prompt": TRANSCRIPT_TO_DIALOGUE_PROMPT_STR,
-    "revise_dialogue_prompt": REVISE_DIALOGUE_PROMPT_STR,
+    "combine_dialogues_prompt": COMBINE_DIALOGUES_PROMPT_STR,
     "podcast_dialogue_prompt": PODCAST_DIALOGUE_PROMPT_STR,
 }
 
