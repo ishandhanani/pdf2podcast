@@ -174,6 +174,7 @@ def generate_raw_outline(
 # TODO: i dont like how this is returning a dict and not an AIMessage
 def generate_structured_outline(
     raw_outline: str,
+    request: TranscriptionRequest,
     llm_manager: LLMManager,
     prompt_tracker: PromptTracker,
     job_id: str,
@@ -184,9 +185,22 @@ def generate_structured_outline(
         JobStatus.PROCESSING,
         "Converting raw outline to structured format",
     )
+
+    # Force the model to only reference valid filenames
+    valid_filenames = [pdf.filename for pdf in request.pdf_metadata]
+    schema = PodcastOutline.model_json_schema()
+    for prop in schema["definitions"]["PodcastSegment"]["properties"]["references"][
+        "items"
+    ]:
+        prop["enum"] = valid_filenames
+
     schema = PodcastOutline.model_json_schema()
     template = PodcastPrompts.get_template("multi_pdf_structured_outline_prompt")
-    prompt = template.render(outline=raw_outline, schema=json.dumps(schema, indent=2))
+    prompt = template.render(
+        outline=raw_outline,
+        schema=json.dumps(schema, indent=2),
+        valid_filenames=[pdf.filename for pdf in request.pdf_metadata],
+    )
     outline: Dict = llm_manager.query_sync(
         "json",
         [{"role": "user", "content": prompt}],
@@ -508,7 +522,7 @@ async def process_transcription(job_id: str, request: TranscriptionRequest):
 
             # Convert to structured format
             outline_json = generate_structured_outline(
-                raw_outline, llm_manager, prompt_tracker, job_id
+                raw_outline, request, llm_manager, prompt_tracker, job_id
             )
             outline = PodcastOutline.model_validate(outline_json)
 
