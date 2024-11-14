@@ -1,18 +1,24 @@
+# Env vars
 include .env
 export
 
 # Version for production deployment
 VERSION := 1.13
+
 # Docker registry and project
 REGISTRY := nvcr.io/pfteb4cqjzrs/playground
+
 # List of services to build
 SERVICES := api-service agent-service pdf-service tts-service
+
 # Required environment variables
 REQUIRED_ENV_VARS := ELEVENLABS_API_KEY NIM_KEY MAX_CONCURRENT_REQUESTS
+
 # Colors for terminal output
 RED := \033[0;31m
 GREEN := \033[0;32m
 NC := \033[0m  # No Color
+
 # Explicitly use bash
 SHELL := /bin/bash
 
@@ -42,7 +48,13 @@ dev: check_env
 	fi
 	docker compose down
 	@echo "$(GREEN)Starting development environment...$(NC)"
-	docker compose -f docker-compose.yaml --env-file .env up --build
+	docker compose -f docker-compose.yaml --env-file .env up --
+
+# Development target for pdf model service
+model-dev:
+	docker compose -f services/PDFService/PDFModelService/docker-compose.yml down
+	@echo "$(GREEN)Starting development environment...$(NC)"
+	docker compose -f services/PDFService/PDFModelService/docker-compose.yml up --build
 
 # Production target
 prod: check_env
@@ -98,4 +110,4 @@ format:
 
 ruff: lint format
 
-.PHONY: check_env dev clean ruff prod version-bump version-bump-major uv
+.PHONY: check_env dev clean ruff prod version-bump version-bump-major uv model-prod model-dev
