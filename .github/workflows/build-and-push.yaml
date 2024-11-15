@@ -103,8 +103,8 @@ jobs:
       - name: Build and push pdf-service
         uses: docker/build-push-action@v6
         with:
-          context: .
-          file: services/PDFService/PDFModelService/Dockerfile.api
+          context: services/PDFService/PDFModelService
+          file: Dockerfile.api
           push: true
           tags: nvcr.io/pfteb4cqjzrs/playground/pdf-model-api:${{ needs.setup.outputs.version }}
   
@@ -126,8 +126,8 @@ jobs:
       - name: Build and push pdf-service
         uses: docker/build-push-action@v6
         with:
-          context: .
-          file: services/PDFService/PDFModelService/Dockerfile.worker
+          context: services/PDFService/PDFModelService
+          file: Dockerfile.worker
           push: true
           tags: nvcr.io/pfteb4cqjzrs/playground/pdf-model-worker:${{ needs.setup.outputs.version }}
 

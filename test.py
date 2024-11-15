@@ -1,6 +1,6 @@
 import requests
 import os
-import ujson as json
+import json as json
 import time
 from datetime import datetime
 from threading import Thread, Event
@@ -8,6 +8,7 @@ import websockets
 import asyncio
 from urllib.parse import urljoin
 import argparse
+from typing import List
 
 
 class StatusMonitor:
@@ -182,7 +183,7 @@ def test_saved_podcasts(base_url: str, job_id: str):
 
 
 def test_api(
-    base_url: str, pdf_files: list[str]
+    base_url: str, pdf_files: List[str]
 ):  # Modified to accept pdf_files parameter
     voice_mapping = {
         "speaker-1": "iP95p4xoKVk53GoZ742B",
