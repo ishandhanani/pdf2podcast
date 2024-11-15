@@ -23,7 +23,7 @@ RUN echo 'from deepsearch_glm.utils.load_pretrained_models import load_pretraine
 RUN python download_models.py
 
 # Copy application files
-COPY tasks.py /app/
+COPY services/PDFService/PDFModelService/tasks.py /app/
 
 # Create directory for temporary files
 RUN mkdir -p /tmp/pdf_conversions
