@@ -12,7 +12,7 @@ RUN apt-get update \
 WORKDIR /app
 
 # Install Python dependencies - only API requirements
-COPY requirements.api.txt /app/
+COPY services/PDFService/PDFModelService/requirements.api.txt /app/
 RUN pip install -r requirements.api.txt
 
 # Copy application files
