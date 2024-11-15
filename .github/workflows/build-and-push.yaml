@@ -104,10 +104,10 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: services/PDFService/PDFModelService
-          file: Dockerfile.api
+          file: services/PDFService/PDFModelService/Dockerfile.api
           push: true
           tags: nvcr.io/pfteb4cqjzrs/playground/pdf-model-api:${{ needs.setup.outputs.version }}
-  
+
   pdf-model-worker:
     needs: setup
     runs-on: blacksmith-4vcpu-ubuntu-2204
@@ -127,7 +127,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: services/PDFService/PDFModelService
-          file: Dockerfile.worker
+          file: services/PDFService/PDFModelService/Dockerfile.worker
           push: true
           tags: nvcr.io/pfteb4cqjzrs/playground/pdf-model-worker:${{ needs.setup.outputs.version }}
 
