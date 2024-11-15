@@ -48,7 +48,7 @@ dev: check_env
 	fi
 	docker compose down
 	@echo "$(GREEN)Starting development environment...$(NC)"
-	docker compose -f docker-compose.yaml --env-file .env up --
+	docker compose -f docker-compose.yaml --env-file .env up --build
 
 # Development target for pdf model service
 model-dev:
