@@ -66,16 +66,24 @@ async def convert_pdfs_to_markdown(pdf_paths: List[str]) -> List[PDFConversionRe
             try:
                 # Send all files in a single request
                 files = []
+                file_handles = []  # Keep track of open file handles
                 for i, path in enumerate(pdf_paths):
-                    with open(path, "rb") as pdf_file:
-                        files.append(
-                            ("files", (f"doc_{i}.pdf", pdf_file, "application/pdf"))
-                        )
+                    file_handle = open(path, "rb")  # Open file
+                    file_handles.append(file_handle)  # Store handle for later cleanup
+                    files.append(
+                        ("files", (f"doc_{i}.pdf", file_handle, "application/pdf"))
+                    )
                     span.set_attribute(f"pdf_path_{i}", path)
 
-                logger.info(f"Sending PDFs to model API: {MODEL_API_URL}")
-                span.set_attribute("model_api_url", MODEL_API_URL)
-                response = await client.post(f"{MODEL_API_URL}/convert", files=files)
+                try:
+                    logger.info(f"Sending PDFs to model API: {MODEL_API_URL}")
+                    span.set_attribute("model_api_url", MODEL_API_URL)
+                    logger.info(f"Sending {len(files)} files to model API")
+                    response = await client.post(f"{MODEL_API_URL}/convert", files=files)
+                finally:
+                    # Clean up file handles after request is complete
+                    for handle in file_handles:
+                        handle.close()
 
                 if response.status_code != 200:
                     raise HTTPException(
@@ -195,10 +203,17 @@ async def process_pdfs(job_id: str, contents: List[bytes], filenames: List[str])
                     )
                     pdf_metadata_list.append(metadata)
 
-                # Store result
+                # Store result - convert datetime to ISO format string
+                serialized_metadata = [
+                    {
+                        **m.model_dump(),
+                        'created_at': m.created_at.isoformat()
+                    } 
+                    for m in pdf_metadata_list
+                ]
                 job_manager.set_result(
                     job_id,
-                    json.dumps([m.model_dump() for m in pdf_metadata_list]).encode(),
+                    json.dumps(serialized_metadata).encode(),
                 )
                 job_manager.update_status(
                     job_id, JobStatus.COMPLETED, "All PDFs processed successfully"
