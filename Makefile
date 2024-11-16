@@ -6,7 +6,7 @@ export
 DETACH ?= 0
 
 # Version for production deployment
-VERSION := 2.2
+VERSION := 2.3
 
 # Docker registry and project
 REGISTRY := nvcr.io/pfteb4cqjzrs/playground
