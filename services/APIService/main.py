@@ -68,7 +68,10 @@ TTS_SERVICE_URL = os.getenv("TTS_SERVICE_URL", "http://localhost:8889")
 MP3_CACHE_TTL = 60 * 60 * 4  # 4 hours
 
 # CORS setup
-CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:3000,https://nvnotebook-lm.vercel.app")
+CORS_ORIGINS = os.getenv(
+    "CORS_ORIGINS",
+    "http://localhost:3000,https://nvnotebook-lm.vercel.app,https://notebooklm.brev.nvidia.com",
+)
 allowed_origins = [origin.strip() for origin in CORS_ORIGINS.split(",")]
 logger.info(f"Configuring CORS with allowed origins: {allowed_origins}")
 app.add_middleware(
@@ -80,6 +83,7 @@ app.add_middleware(
     expose_headers=["Content-Disposition"],
     max_age=3600,
 )
+logger.info(f"CORS configured with allowed origins: {allowed_origins}")
 
 
 @app.websocket("/ws/status/{job_id}")
