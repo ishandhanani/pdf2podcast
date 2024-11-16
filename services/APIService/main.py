@@ -569,8 +569,8 @@ async def delete_saved_podcast(job_id: str):
     with telemetry.tracer.start_as_current_span("api.saved_podcast.delete") as span:
         try:
             span.set_attribute("job_id", job_id)
-            saved_files = storage_manager.list_files_metadata()
-            span.set_attribute("num_files", len(saved_files))
+            # Convert generator to list before checking length
+            saved_files = list(storage_manager.list_files_metadata())
             podcast_metadata = next(
                 (file for file in saved_files if file["job_id"] == job_id), None
             )

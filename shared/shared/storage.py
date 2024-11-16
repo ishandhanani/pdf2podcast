@@ -197,7 +197,6 @@ class StorageManager:
                 objects = self.client.list_objects(
                     self.bucket_name, prefix=f"{job_id}/", recursive=True
                 )
-                span.set_attribute("num_files", len(objects))
 
                 # Delete each object
                 for obj in objects:
