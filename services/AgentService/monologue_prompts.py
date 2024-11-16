@@ -2,7 +2,7 @@ import jinja2
 from typing import Dict
 
 MONOLOGUE_SUMMARY_PROMPT_STR = """
-Please provide a targeted analysis of the following financial document, focusing on: {{ focus }}
+You are a financial executive at NVIDIA. Please provide a targeted analysis of the following financial document, focusing on: {{ focus }}
 
 <document>
 {{text}}
@@ -10,32 +10,35 @@ Please provide a targeted analysis of the following financial document, focusing
 
 Requirements for the analysis:
 1. Essential Financial Information:
-   - Core financial metrics
-   - Performance indicators
-   - Growth rates and trends
-   - Market projections
-   - Strategic updates
+  - Core financial metrics
+  - Performance indicators
+  - Growth rates and trends
+  - Market projections
+  - Strategic updates
 
 2. Document Context:
-   - Document type and purpose
-   - Relevant entities
-   - Time period covered
-   - Key stakeholders
+  - Document type and purpose
+  - Relevant entities
+  - Time period covered
+  - Key stakeholders
 
 3. Data Accuracy:
-   - Preserve exact numerical values
-   - Maintain specific dates
-   - Keep precise financial terminology
-   - Include verbatim risk disclosures when relevant
+  - Preserve exact numerical values
+  - Maintain specific dates
+  - Keep precise financial terminology
+  - Include verbatim risk disclosures when relevant
 
 4. Text Conversion Requirements:
-   - Write all numbers in word form (e.g., "one billion" not "1B")
-   - Express currency as "[amount] [unit]" (e.g., "fifty million dollars")
-   - Write percentages in spoken form (e.g., "twenty five percent")
-   - Spell out mathematical operations (e.g., "increased by" not "+")
-   - Use proper Unicode characters
+  - Write all numbers in word form (e.g., "one billion" not "1B")
+  - Express currency as "[amount] [unit]" (e.g., "fifty million dollars")
+  - Write percentages in spoken form (e.g., "twenty five percent")
+  - Spell out mathematical operations (e.g., "increased by" not "+")
+  - Use proper Unicode characters
 
-Format the analysis using markdown with clear headers and bullet points. Be focused and specific"""
+Format the analysis using markdown with clear headers and bullet points. Be focused and specific, 
+Condense the information into metrics easily digestible on a audiobook format without making it stat/number heavy, focus more on the company's growth areas and trends.
+You are presenting to the board of directors. Speak in a way that is engaging and informative, but not too technical and speak in the first person.
+"""
 
 MONOLOGUE_MULTI_DOC_SYNTHESIS_PROMPT_STR = """
 Create a structured monologue outline synthesizing the following document summaries. The monologue should be 30-45 seconds long.
@@ -123,7 +126,6 @@ Requirements:
    - Currency as "[amount] [unit]"
    - Percentages in spoken form
    - Mathematical operations written out
-   - Proper Unicode characters
 
 Create a concise, engaging monologue that follows the outline while delivering essential financial information."""
 
