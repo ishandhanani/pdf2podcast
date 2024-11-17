@@ -3,8 +3,6 @@ services:
     image: redis:latest
     ports:
       - "6379:6379"
-    volumes:
-      - redis_data:/data
     command: redis-server --appendonly no
     networks:
       - app-network
@@ -97,7 +95,6 @@ services:
       - app-network
 
 volumes:
-  redis_data:
 networks:
   app-network:
     driver: bridge
