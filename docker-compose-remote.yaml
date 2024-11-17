@@ -61,7 +61,9 @@ services:
       - "8003:8003"
     environment:
       - REDIS_URL=redis://redis:6379
-      - MODEL_API_URL=${MODEL_API_URL:-https://pdf-gyrdps568.brevlab.com}
+      - MODEL_API_URL=${MODEL_API_URL:-https://nv-ingest-rest-endpoint.brevlab.com/v1}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       - redis
     networks:
@@ -94,7 +96,6 @@ services:
     networks:
       - app-network
 
-volumes:
 networks:
   app-network:
     driver: bridge
