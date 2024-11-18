@@ -72,7 +72,7 @@ MP3_CACHE_TTL = 60 * 60 * 4  # 4 hours
 # CORS setup
 CORS_ORIGINS = os.getenv(
     "CORS_ORIGINS",
-    "http://localhost:3000,https://nvnotebook-lm.vercel.app,https://notebooklm.brev.nvidia.com",
+    "http://localhost:3000,https://nvnotebook-lm.vercel.app,https://notebooklm.brev.nvidia.com,https://ara.brev.nvidia.com",
 )
 allowed_origins = [origin.strip() for origin in CORS_ORIGINS.split(",")]
 logger.info(f"Configuring CORS with allowed origins: {allowed_origins}")
