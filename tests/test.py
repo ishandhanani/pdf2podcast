@@ -10,6 +10,9 @@ from urllib.parse import urljoin
 import argparse
 from typing import List
 
+# Add global TEST_USER_ID
+TEST_USER_ID = "test-userid"
+
 
 class StatusMonitor:
     def __init__(self, base_url, job_id):
@@ -70,9 +73,7 @@ class StatusMonitor:
                             try:
                                 data = json.loads(message)
                                 if data.get("type") == "ready_check":
-                                    await websocket.send(
-                                        "ready"
-                                    )  # Changed from send_text to send
+                                    await websocket.send("ready")
                                     print(
                                         f"[{self.get_time()}] Sent ready acknowledgment"
                                     )
@@ -138,7 +139,9 @@ def get_output_with_retry(base_url: str, job_id: str, max_retries=5, retry_delay
     """Retry getting output with exponential backoff"""
     for attempt in range(max_retries):
         try:
-            response = requests.get(f"{base_url}/output/{job_id}")
+            response = requests.get(
+                f"{base_url}/output/{job_id}", params={"userId": TEST_USER_ID}
+            )
             if response.status_code == 200:
                 return response.content
             elif response.status_code == 404:
@@ -159,29 +162,44 @@ def get_output_with_retry(base_url: str, job_id: str, max_retries=5, retry_delay
     raise TimeoutError("Failed to get output after maximum retries")
 
 
-def test_saved_podcasts(base_url: str, job_id: str):
-    """Test the saved podcasts endpoints"""
+def test_saved_podcasts(base_url: str, job_id: str, max_retries=5, retry_delay=5):
+    """Test the saved podcasts endpoints with retry logic"""
     print(
         f"\n[{datetime.now().strftime('%H:%M:%S')}] Testing saved podcasts endpoints..."
     )
 
-    # Test 1: Get all saved podcasts
+    # Test 1: Get all saved podcasts with retry
     print("\nTesting list all podcasts endpoint...")
-    response = requests.get(f"{base_url}/saved_podcasts")
-    assert response.status_code == 200, f"Failed to get saved podcasts: {response.text}"
-    podcasts = response.json()["podcasts"]
-    print(f"Found {len(podcasts)} saved podcasts")
+    for attempt in range(max_retries):
+        response = requests.get(
+            f"{base_url}/saved_podcasts", params={"userId": TEST_USER_ID}
+        )
+        assert (
+            response.status_code == 200
+        ), f"Failed to get saved podcasts: {response.text}"
+        podcasts = response.json()["podcasts"]
+        print(f"Found {len(podcasts)} saved podcasts")
 
-    # Verify our new job_id is in the list
-    job_ids = [podcast["job_id"] for podcast in podcasts]
-    assert (
-        job_id in job_ids
-    ), f"Recently created job_id {job_id} not found in saved podcasts"
-    print(f"Successfully found job_id {job_id} in saved podcasts list")
+        # Check if our job_id is in the list
+        job_ids = [podcast["job_id"] for podcast in podcasts]
+        if job_id in job_ids:
+            print(f"Successfully found job_id {job_id} in saved podcasts list")
+            break
+        elif attempt < max_retries - 1:
+            wait_time = retry_delay * (2**attempt)
+            print(
+                f"Job ID not found yet, retrying in {wait_time:.1f}s... (attempt {attempt + 1}/{max_retries})"
+            )
+            time.sleep(wait_time)
+            continue
+        else:
+            assert False, f"Recently created job_id {job_id} not found in saved podcasts after {max_retries} attempts"
 
     # Test 2: Get specific podcast metadata
     print("\nTesting individual podcast metadata endpoint...")
-    response = requests.get(f"{base_url}/saved_podcast/{job_id}/metadata")
+    response = requests.get(
+        f"{base_url}/saved_podcast/{job_id}/metadata", params={"userId": TEST_USER_ID}
+    )
     assert (
         response.status_code == 200
     ), f"Failed to get podcast metadata: {response.text}"
@@ -191,7 +209,9 @@ def test_saved_podcasts(base_url: str, job_id: str):
 
     # Test 3: Get specific podcast audio
     print("\nTesting individual podcast audio endpoint...")
-    response = requests.get(f"{base_url}/saved_podcast/{job_id}/audio")
+    response = requests.get(
+        f"{base_url}/saved_podcast/{job_id}/audio", params={"userId": TEST_USER_ID}
+    )
     assert response.status_code == 200, f"Failed to get podcast audio: {response.text}"
     audio_data = response.content
     print(f"Successfully retrieved audio data, size: {len(audio_data)} bytes")
@@ -222,14 +242,15 @@ def test_api(base_url: str, pdf_files: List[str], monologue: bool = False):
         else:
             sample_pdf_paths.append(os.path.join(samples_dir, pdf_file))
 
-    # Prepare the payload with updated schema
+    # Prepare the payload with updated schema and userId
     transcription_params = {
         "name": "ishan-test",
         "duration": 5,
         "speaker_1_name": "Bob",
         "voice_mapping": voice_mapping,
-        "guide": None,  # Optional guidance for transcription focus
-        "monologue": monologue,  # Add monologue flag
+        "guide": None,
+        "monologue": monologue,
+        "userId": TEST_USER_ID,  # Add userId to transcription params
     }
 
     if not monologue:
@@ -319,5 +340,6 @@ if __name__ == "__main__":
     print(f"API URL: {args.api_url}")
     print(f"Processing PDF files: {args.pdf_files}")
     print(f"Monologue mode: {args.monologue}")
+    print(f"Using test user ID: {TEST_USER_ID}")
 
     test_api(args.api_url, args.pdf_files, args.monologue)

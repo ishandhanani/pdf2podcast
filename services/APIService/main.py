@@ -8,6 +8,7 @@ from fastapi import (
     Response,
     WebSocket,
     WebSocketDisconnect,
+    Query,
 )
 from shared.shared_types import (
     ServiceType,
@@ -162,6 +163,7 @@ def process_pdf_task(
             # Store all original PDFs
             for idx, content in enumerate(files_content):
                 storage_manager.store_file(
+                    transcription_params.userId,
                     job_id,
                     content,
                     f"{job_id}_{idx}.pdf",
@@ -221,6 +223,7 @@ def process_pdf_task(
 
                                 # Store script result in minio
                                 storage_manager.store_file(
+                                    transcription_params.userId,
                                     job_id,
                                     json.dumps(agent_result).encode(),
                                     f"{job_id}_agent_result.json",
@@ -252,6 +255,7 @@ def process_pdf_task(
 
                                 # Store in DB
                                 storage_manager.store_audio(
+                                    transcription_params.userId,
                                     job_id,
                                     audio_content,
                                     f"{job_id}.mp3",
@@ -320,8 +324,9 @@ async def process_pdf(
         return {"job_id": job_id}
 
 
+# TODO: wire up userId auth here
 @app.get("/status/{job_id}")
-async def get_status(job_id: str):
+async def get_status(job_id: str, userId: str = Query(..., description="KAS User ID")):
     """Get aggregated status from all services"""
     with telemetry.tracer.start_as_current_span("api.job.status") as span:
         span.set_attribute("job_id", job_id)
@@ -344,9 +349,8 @@ async def get_status(job_id: str):
         return statuses
 
 
-# This needs to also interact with our db as well. Check cache first if job running. If nothing there, check db
 @app.get("/output/{job_id}")
-async def get_output(job_id: str):
+async def get_output(job_id: str, userId: str = Query(..., description="KAS User ID")):
     """Get the final TTS output"""
     with telemetry.tracer.start_as_current_span("api.job.output") as span:
         span.set_attribute("job_id", job_id)
@@ -368,7 +372,7 @@ async def get_output(job_id: str):
         result = redis_client.get(get_tts_result_key)
         if not result:
             logger.info(f"Final result not found in cache for {job_id}. Checking DB...")
-            result = storage_manager.get_podcast_audio(job_id)
+            result = storage_manager.get_podcast_audio(userId, job_id)
             if not result:
                 span.set_status(StatusCode.ERROR, "result not found")
                 raise HTTPException(status_code=404, detail="Result not found")
@@ -395,12 +399,20 @@ async def cleanup_jobs():
 
 
 @app.get("/saved_podcasts", response_model=Dict[str, List[SavedPodcast]])
-async def get_saved_podcasts():
+async def get_saved_podcasts(
+    userId: str = Query(..., description="KAS User ID", min_length=1),
+):
     """Get a list of all saved podcasts from storage with their audio data"""
     try:
         with telemetry.tracer.start_as_current_span("api.saved_podcasts") as span:
-            saved_files = storage_manager.list_files_metadata()
+            if not userId.strip():  # Check for whitespace-only strings
+                raise HTTPException(status_code=400, detail="userId cannot be empty")
+
+            # Pass userId to filter results - storage manager handles the filtering
+            saved_files = storage_manager.list_files_metadata(user_id=userId)
             span.set_attribute("num_files", len(saved_files))
+            span.set_attribute("user_id", userId)
+
             return {
                 "podcasts": [
                     SavedPodcast(
@@ -414,7 +426,7 @@ async def get_saved_podcasts():
                 ]
             }
     except Exception as e:
-        logger.error(f"Failed to list saved podcasts: {str(e)}")
+        logger.error(f"Failed to list saved podcasts for user {userId}: {str(e)}")
         span.set_status(StatusCode.ERROR, "failed to list saved podcasts")
         raise HTTPException(
             status_code=500, detail=f"Failed to retrieve saved podcasts: {str(e)}"
@@ -422,14 +434,16 @@ async def get_saved_podcasts():
 
 
 @app.get("/saved_podcast/{job_id}/metadata", response_model=SavedPodcast)
-async def get_saved_podcast_metadata(job_id: str):
+async def get_saved_podcast_metadata(
+    job_id: str, userId: str = Query(..., description="KAS User ID")
+):
     """Get a specific saved podcast metadata without audio data"""
     try:
         with telemetry.tracer.start_as_current_span(
             "api.saved_podcast.metadata"
         ) as span:
             span.set_attribute("job_id", job_id)
-            saved_files = storage_manager.list_files_metadata()
+            saved_files = storage_manager.list_files_metadata(user_id=userId)
             podcast_metadata = next(
                 (file for file in saved_files if file["job_id"] == job_id), None
             )
@@ -453,13 +467,15 @@ async def get_saved_podcast_metadata(job_id: str):
 
 
 @app.get("/saved_podcast/{job_id}/audio", response_model=SavedPodcastWithAudio)
-async def get_saved_podcast(job_id: str):
+async def get_saved_podcast(
+    job_id: str, userId: str = Query(..., description="KAS User ID")
+):
     """Get a specific saved podcast with its audio data"""
     try:
         with telemetry.tracer.start_as_current_span("api.saved_podcast.audio") as span:
             span.set_attribute("job_id", job_id)
             # Get metadata first
-            saved_files = storage_manager.list_files_metadata()
+            saved_files = storage_manager.list_files_metadata(user_id=userId)
             podcast_metadata = next(
                 (file for file in saved_files if file["job_id"] == job_id), None
             )
@@ -470,7 +486,7 @@ async def get_saved_podcast(job_id: str):
                 )
 
             # Get audio data
-            audio_data = storage_manager.get_podcast_audio(job_id)
+            audio_data = storage_manager.get_podcast_audio(userId, job_id)
             if not audio_data:
                 raise HTTPException(
                     status_code=404, detail=f"Audio data for podcast {job_id} not found"
@@ -496,14 +512,16 @@ async def get_saved_podcast(job_id: str):
 
 
 @app.get("/saved_podcast/{job_id}/transcript", response_model=Conversation)
-async def get_saved_podcast_transcript(job_id: str):
+async def get_saved_podcast_transcript(
+    job_id: str, userId: str = Query(..., description="KAS User ID")
+):
     """Get a specific saved podcast transcript"""
     with telemetry.tracer.start_as_current_span("api.saved_podcast.transcript") as span:
         try:
             span.set_attribute("job_id", job_id)
             filename = f"{job_id}_agent_result.json"
             span.set_attribute("filename", filename)
-            raw_data = storage_manager.get_file(job_id, filename)
+            raw_data = storage_manager.get_file(userId, job_id, filename)
 
             if not raw_data:
                 raise HTTPException(
@@ -528,14 +546,16 @@ async def get_saved_podcast_transcript(job_id: str):
 
 
 @app.get("/saved_podcast/{job_id}/history")
-async def get_saved_podcast_agent_workflow(job_id: str):
+async def get_saved_podcast_agent_workflow(
+    job_id: str, userId: str = Query(..., description="KAS User ID")
+):
     """Get a specific saved podcast agent workflow"""
     with telemetry.tracer.start_as_current_span("api.saved_podcast.history") as span:
         try:
             span.set_attribute("job_id", job_id)
             filename = f"{job_id}_prompt_tracker.json"
             span.set_attribute("filename", filename)
-            raw_data = storage_manager.get_file(job_id, filename)
+            raw_data = storage_manager.get_file(userId, job_id, filename)
 
             if not raw_data:
                 span.set_status(StatusCode.ERROR, "not found")
@@ -554,14 +574,16 @@ async def get_saved_podcast_agent_workflow(job_id: str):
 
 
 @app.get("/saved_podcast/{job_id}/pdf")
-async def get_saved_podcast_pdf(job_id: str):
+async def get_saved_podcast_pdf(
+    job_id: str, userId: str = Query(..., description="KAS User ID")
+):
     """Get the original PDF file for a specific podcast"""
     with telemetry.tracer.start_as_current_span("api.saved_podcast.pdf") as span:
         try:
             span.set_attribute("job_id", job_id)
             filename = f"{job_id}.pdf"
             span.set_attribute("filename", filename)
-            pdf_data = storage_manager.get_file(job_id, filename)
+            pdf_data = storage_manager.get_file(userId, job_id, filename)
 
             if not pdf_data:
                 span.set_status(StatusCode.ERROR, "not found")
@@ -584,13 +606,15 @@ async def get_saved_podcast_pdf(job_id: str):
 
 
 @app.delete("/saved_podcast/{job_id}")
-async def delete_saved_podcast(job_id: str):
+async def delete_saved_podcast(
+    job_id: str, userId: str = Query(..., description="KAS User ID")
+):
     """Delete a specific saved podcast and all its associated files"""
     with telemetry.tracer.start_as_current_span("api.saved_podcast.delete") as span:
         try:
             span.set_attribute("job_id", job_id)
             # Convert generator to list before checking length
-            saved_files = list(storage_manager.list_files_metadata())
+            saved_files = list(storage_manager.list_files_metadata(user_id=userId))
             podcast_metadata = next(
                 (file for file in saved_files if file["job_id"] == job_id), None
             )
@@ -601,7 +625,7 @@ async def delete_saved_podcast(job_id: str):
                     status_code=404, detail=f"Podcast with job_id {job_id} not found"
                 )
 
-            success = storage_manager.delete_job_files(job_id)
+            success = storage_manager.delete_job_files(userId, job_id)
 
             if not success:
                 raise HTTPException(
