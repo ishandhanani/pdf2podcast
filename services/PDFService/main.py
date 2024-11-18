@@ -1,4 +1,4 @@
-from fastapi import FastAPI, File, UploadFile, BackgroundTasks, HTTPException
+from fastapi import FastAPI, File, UploadFile, BackgroundTasks, HTTPException, Form
 from shared.shared_types import ServiceType, JobStatus, StatusResponse
 from shared.job import JobStatusManager
 from shared.otel import OpenTelemetryInstrumentation, OpenTelemetryConfig
@@ -7,10 +7,9 @@ import httpx
 import tempfile
 import os
 import logging
-import time
 import asyncio
 import ujson as json
-from typing import Optional, List
+from typing import List
 from pydantic import BaseModel, Field
 from enum import Enum
 from datetime import datetime
@@ -273,11 +272,12 @@ async def process_pdfs(job_id: str, contents: List[bytes], filenames: List[str])
 async def convert_pdf(
     background_tasks: BackgroundTasks,
     files: List[UploadFile] = File(...),
-    job_id: Optional[str] = None,
+    job_id: str = Form(...),
 ):
     """Convert multiple PDFs to Markdown"""
     with telemetry.tracer.start_as_current_span("pdf.convert_pdf") as span:
         # Validate all files are PDFs
+        span.set_attribute("job_id", job_id)
         for file in files:
             if file.content_type != "application/pdf":
                 raise HTTPException(status_code=400, detail="All files must be PDFs")
@@ -291,11 +291,6 @@ async def convert_pdf(
             contents.append(content)
             filenames.append(file.filename)
 
-        # Create job
-        if not job_id:
-            job_id = str(int(time.time()))
-
-        span.set_attribute("job_id", job_id)
         span.set_attribute("num_files", len(files))
         job_manager.create_job(job_id)
 
