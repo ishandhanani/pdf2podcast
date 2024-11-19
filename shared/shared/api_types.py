@@ -57,6 +57,10 @@ class TranscriptionParams(BaseModel):
     guide: Optional[str] = Field(
         None, description="Optional guidance for the transcription focus and structure"
     )
+    vdb_task: bool = Field(
+        False,
+        description="If True, creates a VDB task when running NV-Ingest allowing for retrieval abilities",
+    )
 
     @model_validator(mode="after")
     def validate_monologue_settings(self) -> "TranscriptionParams":
@@ -93,3 +97,9 @@ class TranscriptionParams(BaseModel):
 class TranscriptionRequest(TranscriptionParams):
     pdf_metadata: List[PDFMetadata]
     job_id: str
+
+
+class RAGRequest(BaseModel):
+    query: str = Field(..., description="The search query to process")
+    k: int = Field(..., description="Number of results to retrieve", ge=1)
+    job_id: str = Field(..., description="The unique job identifier")
