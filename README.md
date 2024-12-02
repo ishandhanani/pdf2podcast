@@ -1,57 +1,114 @@
-# Podcast Generation System
+# AI Research Assistant
 
-This project implements a sophisticated podcast generation system using a combination of microservices and Large Language Models (LLMs). The system is designed to process PDF inputs and generate audio outputs through a series of interconnected services.
+## Overview
+A microservice driven implementation for transforming PDFs into engaging audio content. For a deeper dive into the system architecture, please see the diagram below:
 
-## Microservice Workflow
+You can view a mermaid diagram of our system [here](docs/README.md).
 
-The microservice architecture is designed to process PDFs and generate audio files in a sequential manner. Here's an overview of the workflow:
+## Quick Start Guide
 
-![Microservice Workflow](static/Microservice_flow.svg)
+1. **Environment Variables**:
+   We require the following environment variables to be set:
+   ```bash
+   # Create .env file with required variables
+   echo "ELEVENLABS_API_KEY=your_key" > .env
+   echo "NIM_KEY=your_key" >> .env
+   echo "MAX_CONCURRENT_REQUESTS=1" >> .env
+   ```
 
-1. **User Uploads PDF**: The process begins when a user uploads a PDF file to the system.
-2. **Validate PDF File Type**: The system checks if the uploaded file is a valid PDF.
-3. **Convert PDF to Markdown Service**: This service extracts the content from the PDF and converts it into a markdown format.
-4. **Process Markdown with Agent Service**: An intelligent agent processes the markdown content, potentially enriching or structuring it further.
-5. **Generate TTS Service**: The processed content is then converted into speech using a Text-to-Speech (TTS) service.
-6. **Return Audio File to User**: Finally, the system provides the generated audio file back to the user.
+   Note that in production we use the NVIDIA Eleven Labs API key which can handle concurrent requests. For local development, you may want to set `MAX_CONCURRENT_REQUESTS=1` to avoid rate limiting issues. You can generate your own testing API key for free [here](https://elevenlabs.io/).
 
-## LLM Flow
+2. **Install Dependencies**:
+   We use UV to manage python dependencies.
+   
+   ```bash
+   make uv
+   ```
+   This will:
+   - Install UV if not present
+   - Create virtual environment
+   - Install project dependencies
 
-The LLM (Large Language Model) flow is a crucial part of the content generation process. It takes the input text and transforms it into a structured dialogue suitable for a podcast. Here's a detailed explanation of each step:
+   If you open up a new terminal window and want to quickly re-use the same environment, you can run `make uv` again.
 
-![LLM Flow](static/LLM_flow.svg)
+3. **Start Development Server**:
+   You can start the entire stack with:
+   ```bash
+   make all-services
+   ```
 
-1. **Input Text**: The initial input provided for generating the podcast content.
-2. **Raw Outline Generation**: Creates a basic structure from the input text, outlining the key points.
-3. **Structured Outline Conversion**: Converts the raw outline into a structured format that adheres to a specific schema for downstream processing.
-4. **Segment Transcript Generation**: Generates detailed transcripts for each segment based on the structured outline, focusing on specific topics for in-depth coverage.
-5. **Transcript Optimization**: Combines and refines individual segment transcripts to ensure a smooth and coherent flow across the entire content.
-6. **Podcast Dialogue Creation**: Transforms the optimized transcript into a dynamic dialogue, incorporating conversational elements.
-7. **Dialogue Revision**: Reviews and enriches the dialogue, adding any missing details or exchanges for completeness.
-8. **Structured Dialogue Conversion**: Converts the final dialogue into a structured JSON format for further use.
-9. **Output JSON**: The completed structured dialogue, ready for various applications.
+   This command will:
+   - Verify environment variables are set
+   - Create necessary directories
+   - Start all services using Docker Compose in `--build` mode. 
 
-## Key Features
+   > **Note:** The first time you run `make all-services`, the `docling` service may take 10-15 minutes to pull and build. Subsequent runs will be much faster.
 
-- PDF to Audio conversion
-- Intelligent content processing using LLMs
-- Microservice architecture for scalability and maintainability
-- Dynamic and parallel execution of services
-- Structured dialogue generation for podcast-like content
+   You can also set `DETACH=1` to run the services in detached mode, which allows you to continue using your terminal while the services are running.
 
-## Development
+4. **Run Podcast Generation**:
+   ```bash
+   python tests/test.py --target <pdf1.pdf> --context <pdf2.pdf>
+   ```
 
-In order to run this project locally, you can simply run the following command:
+   This will generate a 2-person podcast. In order to generate a 1-person monologue, you can add the `--monologue` flag. Check out the test file for more examples. If you are not on a GPU machine, the PDF service might take a while to run.
 
+## Hosting the PDF service on a separate machine
+
+As stated above, we use [docling](https://github.com/DS4SD/docling) as our default PDF service. When you spin up the stack, docling will be built and run automatically.
+
+If you would like to run the PDF service on a separate machine, you can add the following to your `.env` file:
 ```bash
-make dev
+echo "MODEL_API_URL=<pdf-model-service-url" >> .env
 ```
-This will connect to the production LLM and PDF endpoint. The rest of the stack will run locally. From there, simply run 
 
+### Using `nv-ingest`
+
+We also support using a fork of NVIDIA's [NV-Ingest](https://github.com/NVIDIA/NV-Ingest) as our PDF service. This requires 2 A100-SXM machines. See the [repo](https://github.com/jdye64/nv-ingest/tree/brev-dev-convert-endpoint) for more information. If you would like to use this, you can add the following to your `.env` file:
 ```bash
-python test.py
+echo "MODEL_API_URL=<nv-ingest-url>/v1" >> .env
+```
+**Note the use of `v1` in the URL.**    
+
+Here is the workflow that we use for running this in production (disaggregated core services and pdf model service):
+```bash
+# On an L40s machine
+make model-prod
+
+# On a different machine
+make prod
+```
+
+## Development Tools
+
+### Tracing
+We expose a Jaeger instance at `http://localhost:16686/` for tracing. This is useful for debugging and monitoring the system.
+
+### Code Quality
+The project uses `ruff` for linting and formatting. You must run `make ruff` before your PR can be merged:
+```bash
+make ruff  # Runs both lint and format
 ```
 
 ## CI/CD
+We use GitHub Actions for CI/CD. We run the following actions:
+- `ruff`: Runs linting and formatting
+- `pr-test`: Runs an e2e podcast test on the PR
+- `build-and-push`: Builds and pushes a new container image to the remote repo. This is used to update production deployments
 
-We use GitHub Actions to run the CI/CD pipeline. We use `ruff` for linting and formatting. To run locally, simply run `make ruff`.
+## Production Deployment
+For production deployment:
+```bash
+make prod
+```
+
+This uses the remote Docker Compose configuration and pulls pre-built images from the registry.
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Run tests: `python tests/test.py <pdf1> <pdf2>`
+5. Run linting: `make ruff`
+6. Submit a pull request
