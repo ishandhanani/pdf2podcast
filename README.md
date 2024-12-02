@@ -79,6 +79,14 @@ make model-prod
 make prod
 ```
 
+## Selecting LLMs 
+
+We currently use an ensemble of 3 LLMS to generate these podcasts. Out of the box, we recommend using the LLama 3.1-70B NIM. If you would like to use a different model, you can update the `models.json` file with the desired model.
+
+## Optimizing for GPU usage
+
+Due to our design, it is relatively easy to swap out different pieces of our stack to optimize for GPU usage and available hardware. For example, you could swap each model with the smaller LLama 3.1-8B NIM and disable GPU usage for `docling` in `docker-compose.yaml`.
+
 ## Development Tools
 
 ### Tracing
