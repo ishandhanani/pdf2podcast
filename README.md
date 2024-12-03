@@ -48,6 +48,7 @@ You can view a mermaid diagram of our system [here](docs/README.md).
 
 4. **Run Podcast Generation**:
    ```bash
+   source .venv/bin/activate
    python tests/test.py --target <pdf1.pdf> --context <pdf2.pdf>
    ```
 
@@ -81,7 +82,7 @@ make prod
 
 ## Selecting LLMs 
 
-We currently use an ensemble of 3 LLMS to generate these podcasts. Out of the box, we recommend using the LLama 3.1-70B NIM. If you would like to use a different model, you can update the `models.json` file with the desired model.
+We currently use an ensemble of 3 LLMS to generate these podcasts. Out of the box, we recommend using the LLama 3.1-70B NIM. If you would like to use a different model, you can update the `models.json` file with the desired model. The default `models.json` calls a NIM that I have currently hosted. Feel free to use it as you develop locally. When you deploy, please use our NIM API Catalog endpoints.
 
 ## Optimizing for GPU usage
 
