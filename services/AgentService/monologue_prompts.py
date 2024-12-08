@@ -2,19 +2,19 @@ import jinja2
 from typing import Dict
 
 MONOLOGUE_SUMMARY_PROMPT_STR = """
-You are a financial executive at NVIDIA. Please provide a targeted analysis of the following financial document, focusing on: {{ focus }}
+You are a knowledgeable analyst. Please provide a targeted analysis of the following document, focusing on: {{ focus }}
 
 <document>
 {{text}}
 </document>
 
 Requirements for the analysis:
-1. Essential Financial Information:
-  - Core financial metrics
-  - Performance indicators
-  - Growth rates and trends
-  - Market projections
-  - Strategic updates
+1. Essential Information:
+  - Key metrics and data points
+  - Important trends
+  - Notable patterns
+  - Future projections
+  - Strategic insights
 
 2. Document Context:
   - Document type and purpose
@@ -25,8 +25,8 @@ Requirements for the analysis:
 3. Data Accuracy:
   - Preserve exact numerical values
   - Maintain specific dates
-  - Keep precise financial terminology
-  - Include verbatim risk disclosures when relevant
+  - Keep precise terminology
+  - Include verbatim important disclosures when relevant
 
 4. Text Conversion Requirements:
   - Write all numbers in word form (e.g., "one billion" not "1B")
@@ -47,7 +47,7 @@ Focus Areas & Key Topics:
 {% if focus_instructions %}
 {{focus_instructions}}
 {% else %}
-Use your judgment to identify and prioritize the most important financial themes, metrics, and insights across all documents.
+Use your judgment to identify and prioritize the most important themes, metrics, and insights across all documents.
 {% endif %}
 
 Available Source Documents:
@@ -55,9 +55,9 @@ Available Source Documents:
 
 Requirements:
 1. Content Strategy
-   - Focus on the content in Target Documents, and use Context Documents as support and context
-   - Identify key financial metrics and trends
-   - Analyze potential stakeholder concerns
+   - Focus on the content in Target Documents, and use Context Documents as support
+   - Identify key metrics and trends
+   - Analyze potential implications
    - Draw connections between documents and focus areas
 
 2. Structure Requirements
@@ -81,7 +81,7 @@ Requirements:
 Output a structured outline that synthesizes insights across all documents, emphasizing Target Documents while using Context Documents for support."""
 
 MONOLOGUE_TRANSCRIPT_PROMPT_STR = """
-Create a focused financial update based on this outline and source documents.
+Create a focused update based on this outline and source documents.
 
 Outline:
 {{ raw_outline }}
