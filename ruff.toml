@@ -1,3 +1,5 @@
-exclude = [
-    ".ipynb"
-]
+[format]
+exclude = ["*.ipynb"]
+
+[lint]
+exclude = ["*.ipynb"]
